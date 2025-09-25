@@ -116,6 +116,18 @@ describe('TickMath Boundary Tests', () => {
       expect(() => getTickAtSqrtRatio(MIN_SQRT_RATIO - 1n)).to.throw();
       expect(() => getTickAtSqrtRatio(MAX_SQRT_RATIO)).to.throw();
     });
+
+    it('should reject invalid sqrt ratios as specified in problem statement', () => {
+      // Test zero sqrt ratio
+      expect(() => getTickAtSqrtRatio(0n)).to.throw();
+      
+      // Test below minimum sqrt ratio
+      expect(() => getTickAtSqrtRatio(MIN_SQRT_RATIO - 1n)).to.throw();
+      
+      // Test at or above maximum sqrt ratio
+      expect(() => getTickAtSqrtRatio(MAX_SQRT_RATIO)).to.throw();
+      expect(() => getTickAtSqrtRatio(MAX_SQRT_RATIO + 1n)).to.throw();
+    });
   });
 
   describe('Tolerance documentation and rationale', () => {

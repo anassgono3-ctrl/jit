@@ -86,10 +86,27 @@ vim src/config/strategy-config.json
 NETWORK=mainnet DRY_RUN=true npm start
 ```
 
-#### Live Mode 
+#### Live Mode (Production Safety Guard)
 ```bash
-# Live mainnet execution - requires private key
-NETWORK=mainnet DRY_RUN=false PRIVATE_KEY=0xabc... npm start
+# Live mainnet execution - requires valid private key
+NETWORK=mainnet DRY_RUN=false PRIVATE_KEY=0xabc123... npm start
+```
+
+**Live-Mode Guard**: The bot defaults to simulation mode for safety. To run live you MUST supply a valid private key (0x + 64 hex chars). If `DRY_RUN=false` and the key is missing or malformed, startup aborts with an explicit log and exit code 1 to prevent accidental mainnet execution.
+
+**Example Safety Checks:**
+```bash
+# Missing key - exits with error
+DRY_RUN=false npm start
+# Output: [STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.
+
+# Invalid key format - exits with error  
+DRY_RUN=false PRIVATE_KEY=0x123 npm start
+# Output: [STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).
+
+# Valid key format - proceeds normally
+DRY_RUN=false PRIVATE_KEY=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef npm start
+# Output: [STARTUP] Live-mode key validated; proceeding...
 ```
 
 #### Erigon Integration
