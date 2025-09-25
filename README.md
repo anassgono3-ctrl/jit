@@ -78,6 +78,30 @@ vim .env
 vim src/config/strategy-config.json
 ```
 
+### Configuration & .env Loading
+
+The bot loads environment variables with the following precedence:
+
+1. Exported shell or process-level env (highest)
+2. `.env` file in project root (via `dotenv`)
+3. Internal defaults (e.g. `DRY_RUN=true`, `NETWORK=mainnet`)
+
+Example `.env`:
+```
+DRY_RUN=false
+PRIVATE_KEY=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+NETWORK=mainnet
+ERIGON_RPC_HTTP=http://127.0.0.1:8545
+FALLBACK_RPC_HTTP=wss://mainnet.infura.io/ws/v3/xxx
+```
+
+To confirm `.env` is loaded, set `DRY_RUN=false` there and ensure startup logs:
+```
+[STARTUP] Mode: DRY_RUN=false (live)
+```
+
+If you omit a PRIVATE_KEY while `DRY_RUN=false`, startup aborts intentionally.
+
 ### Runtime Modes
 
 #### Dry-Run Mode (Default)
@@ -98,15 +122,15 @@ NETWORK=mainnet DRY_RUN=false PRIVATE_KEY=0xabc123... npm start
 ```bash
 # Missing key - exits with error
 DRY_RUN=false npm start
-# Output: [STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.
+# Output: [STARTUP] Live-mode safety check failed: Live mode requires PRIVATE_KEY (missing).
 
 # Invalid key format - exits with error  
 DRY_RUN=false PRIVATE_KEY=0x123 npm start
-# Output: [STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).
+# Output: [CONFIG] Validation error: PRIVATE_KEY PRIVATE_KEY must be 0x + 64 hex chars if provided
 
 # Valid key format - proceeds normally
 DRY_RUN=false PRIVATE_KEY=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef npm start
-# Output: [STARTUP] Live-mode key validated; proceeding...
+# Output: [STARTUP] Mode: DRY_RUN=false (live)
 ```
 
 #### Erigon Integration

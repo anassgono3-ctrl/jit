@@ -1,35 +1,21 @@
 /**
- * Entry point for JIT Liquidity Bot
- *
- * Live-Mode Guard:
- *  - If DRY_RUN=false -> requires a properly formatted PRIVATE_KEY
- *  - PRIVATE_KEY must match /^0x[0-9a-fA-F]{64}$/ (64 hex bytes)
+ * Entry point.
+ * Ensures deterministic .env loading via config module.
  */
 
 import { log } from './modules/logger';
+import { config, assertLiveModeSafety, sanitizedConfigForLog } from './config/env';
 
-// --- Live-Mode Guard (place before any network connections or async init) ---
-(function enforceLiveModeSafety() {
-  const dryRun = (process.env.DRY_RUN ?? 'true').toLowerCase() === 'true';
-  if (dryRun) {
-    log.info('[STARTUP] DRY_RUN=true (simulation mode). Skipping PRIVATE_KEY validation.');
-    return;
-  }
-
-  const pk = process.env.PRIVATE_KEY;
-  const validFormat = typeof pk === 'string' && /^0x[0-9a-fA-F]{64}$/.test(pk);
-
-  if (!validFormat) {
-    if (!pk) {
-      log.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.');
-    } else {
-      log.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).');
-    }
-    log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
+(function startup() {
+  log.info(`[STARTUP] Mode: ${config.DRY_RUN ? 'DRY_RUN=true (simulation)' : 'DRY_RUN=false (live)'}`);
+  try {
+    assertLiveModeSafety();
+  } catch (err) {
+    log.error('[STARTUP] Live-mode safety check failed:', { error: (err as Error).message });
     process.exit(1);
   }
 
-  log.info('[STARTUP] Live-mode key validated; proceeding...');
+  log.info('[CONFIG] Effective configuration (sanitized):', sanitizedConfigForLog());
 })();
 
 // ---------------------------------------------------------------------------
@@ -41,8 +27,8 @@ async function main() {
   
   // Log startup configuration
   log.info('[STARTUP] Configuration:', {
-    dryRun: process.env.DRY_RUN,
-    network: process.env.NETWORK,
+    dryRun: config.DRY_RUN,
+    network: config.NETWORK,
     logLevel: process.env.LOG_LEVEL,
     metricsPort: process.env.METRICS_PORT,
   });
