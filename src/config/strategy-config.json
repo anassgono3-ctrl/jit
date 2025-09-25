@@ -1,0 +1,20 @@
+{
+  "minSwapUsdByFeeTier": {
+    "0.003": 15000,
+    "0.0005": 70000,
+    "0.01": 5000
+  },
+  "minNetProfitUsd": 25,
+  "gasEstimateUsd": 15,
+  "captureFractionDefault": 0.9,
+  "inclusionProbabilityDefault": 0.4,
+  "tickWidthDefaults": {
+    "narrow": 10,
+    "medium": 20,
+    "wide": 40
+  },
+  "flashloanFeeBps": 5,
+  "maxSlippageBps": 50,
+  "competitionFactor": 1.2,
+  "riskAdjustmentFactor": 0.8
+}
