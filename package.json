@@ -1,0 +1,49 @@
+{
+  "name": "jit-liquidity-bot",
+  "version": "1.0.0",
+  "description": "JIT liquidity bot for Uniswap V3 on Ethereum",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "mocha -r ts-node/register tests/**/*.test.ts --timeout 20000",
+    "backtest": "node -r ts-node/register src/backtest/runner.ts",
+    "lint": "eslint src tests --ext .ts",
+    "lint:fix": "eslint src tests --ext .ts --fix",
+    "format": "prettier --write src tests",
+    "start": "node -r ts-node/register src/index.ts",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "uniswap",
+    "jit",
+    "liquidity",
+    "defi",
+    "ethereum",
+    "bot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.8.0",
+    "jsbi": "^4.3.0",
+    "decimal.js": "^10.4.3",
+    "pino": "^8.15.0",
+    "prom-client": "^15.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1",
+    "mocha": "^10.2.0",
+    "chai": "^4.3.8",
+    "@types/node": "^20.8.0",
+    "@types/mocha": "^10.0.2",
+    "@types/chai": "^4.3.6",
+    "eslint": "^8.50.0",
+    "@typescript-eslint/parser": "^6.7.4",
+    "@typescript-eslint/eslint-plugin": "^6.7.4",
+    "prettier": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
