@@ -62,8 +62,8 @@ export function getTickAtSqrtRatio(sqrtRatioX96: bigint): number {
   const base = new Decimal(1.0001);
   const tick = price.ln().div(base.ln());
   
-  // Round down to get the floor tick - use decimal floor instead of Number conversion
-  return tick.floor().toNumber();
+  // Round down to get the floor tick
+  return Math.floor(tick.toNumber());
 }
 
 /**

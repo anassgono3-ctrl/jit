@@ -78,39 +78,6 @@ vim .env
 vim src/config/strategy-config.json
 ```
 
-### Runtime Modes
-
-#### Dry-Run Mode (Default)
-```bash
-# Safe simulation mode - no real transactions
-NETWORK=mainnet DRY_RUN=true npm start
-```
-
-#### Live Mode 
-```bash
-# Live mainnet execution - requires private key
-NETWORK=mainnet DRY_RUN=false PRIVATE_KEY=0xabc... npm start
-```
-
-#### Erigon Integration
-```bash
-# Preferred setup with Erigon node for efficient txpool access
-ERIGON_RPC_HTTP=http://127.0.0.1:8545 \
-FALLBACK_RPC_HTTP=https://mainnet.infura.io/v3/YOUR_KEY \
-npm start
-```
-
-### Erigon Node Setup (Recommended)
-```bash
-# Start Erigon with txpool API enabled
-erigon \
-  --http \
-  --http.api=eth,debug,trace,txpool \
-  --private.api.addr=localhost:9090 \
-  --txpool.globalqueue=10000 \
-  --txpool.globalbasefee=1000000000
-```
-
 ## Core Components
 
 ### Math Modules (Zero Precision Loss)
@@ -261,13 +228,6 @@ log.info('JIT attempt initiated', {
   expectedProfitUsd: '150'
 });
 ```
-
-#### Logging Legend (Prefix Tags)
-- `[PLAN]` - JIT planning decisions and strategy logic
-- `[EXEC]` - Live transaction execution and results
-- `[SIM]` - Simulation engine operations and dry-run results
-- `[ERIGON-TXPOOL]` - Erigon txpool integration and monitoring
-- `[ETH-PENDING]` - Standard pending transaction subscription fallback
 
 ### Metrics (`src/modules/metrics.ts`)
 ```typescript

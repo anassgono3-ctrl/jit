@@ -6,7 +6,6 @@ import { log } from '../modules/logger';
 import { metrics } from '../modules/metrics';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import Ajv from 'ajv';
 
 // Configure decimal.js for high precision
 Decimal.config({
@@ -65,25 +64,7 @@ export interface BacktestResult {
 export interface BacktestResults {
   /** Individual fixture results */
   results: BacktestResult[];
-  /** Success rate as decimal (0.0 to 1.0) */
-  successRate: number;
-  /** Median profit in USD */
-  medianProfitUsd: number;
-  /** Worst (most negative) profit in USD */
-  worstProfitUsd: number;
-  /** Total number of JIT plans generated */
-  totalPlans: number;
-  /** Number of plans that were accepted for execution */
-  acceptedPlans: number;
-  /** Statistics on why plans were rejected */
-  rejectionStats: {
-    profitBelowThreshold: number;
-    minSwapUsdNotMet: number;
-    liquidityNotViable: number;
-    gasTooHigh: number;
-    inclusionProbTooLow: number;
-  };
-  /** Summary statistics (legacy compatibility) */
+  /** Summary statistics */
   summary: {
     totalFixtures: number;
     successfulPlans: number;
@@ -93,7 +74,7 @@ export interface BacktestResults {
     successRate: number;
     averageExecutionTimeMs: number;
   };
-  /** Performance distribution (legacy compatibility) */
+  /** Performance distribution */
   distribution: {
     profitBuckets: Record<string, number>;
     executionTimeBuckets: Record<string, number>;
@@ -178,31 +159,12 @@ export class BacktestRunner {
       }
     }
 
-    // Calculate summary statistics
+    // Calculate summary
     const summary = this.calculateSummary(results);
     const distribution = this.calculateDistribution(results);
 
-    // Calculate new required fields
-    const successRate = summary.successRate;
-    const profitValues = results.map(r => parseFloat(r.actualProfitUsd)).sort((a, b) => a - b);
-    const medianProfitUsd = profitValues.length > 0 
-      ? profitValues[Math.floor(profitValues.length / 2)] 
-      : 0;
-    const worstProfitUsd = profitValues.length > 0 ? Math.min(...profitValues) : 0;
-    const totalPlans = results.length; // Total fixtures attempted
-    const acceptedPlans = results.filter(r => r.planned).length;
-    
-    // Calculate rejection statistics (simplified for now)
-    const rejectionStats = this.calculateRejectionStats(results);
-
     const backtestResults: BacktestResults = {
       results,
-      successRate,
-      medianProfitUsd,
-      worstProfitUsd,
-      totalPlans,
-      acceptedPlans,
-      rejectionStats,
       summary,
       distribution,
       timestamp: Date.now(),
@@ -434,86 +396,12 @@ export class BacktestRunner {
    * Save results to file
    */
   private async saveResults(results: BacktestResults): Promise<void> {
-    // Validate against schema
-    await this.validateSchema(results);
-
     await fs.writeFile(
       this.config.outputFile,
       JSON.stringify(results, null, 2)
     );
     
     log.info('Backtest results saved', { file: this.config.outputFile });
-  }
-
-  /**
-   * Calculate rejection statistics based on validation errors
-   */
-  private calculateRejectionStats(results: BacktestResult[]): {
-    profitBelowThreshold: number;
-    minSwapUsdNotMet: number;
-    liquidityNotViable: number;
-    gasTooHigh: number;
-    inclusionProbTooLow: number;
-  } {
-    const stats = {
-      profitBelowThreshold: 0,
-      minSwapUsdNotMet: 0,
-      liquidityNotViable: 0,
-      gasTooHigh: 0,
-      inclusionProbTooLow: 0,
-    };
-
-    for (const result of results) {
-      if (!result.planned || !result.validation.passed) {
-        // Analyze validation errors to categorize rejections
-        const errors = result.validation.errors.join(' ').toLowerCase();
-        
-        if (errors.includes('profit') && errors.includes('below')) {
-          stats.profitBelowThreshold++;
-        } else if (errors.includes('minimum') || errors.includes('swap')) {
-          stats.minSwapUsdNotMet++;
-        } else if (errors.includes('liquidity')) {
-          stats.liquidityNotViable++;
-        } else if (errors.includes('gas')) {
-          stats.gasTooHigh++;
-        } else if (errors.includes('inclusion') || errors.includes('probability')) {
-          stats.inclusionProbTooLow++;
-        } else {
-          // Default to profit threshold for unclassified rejections
-          stats.profitBelowThreshold++;
-        }
-      }
-    }
-
-    return stats;
-  }
-
-  /**
-   * Validate results against JSON schema
-   */
-  private async validateSchema(results: BacktestResults): Promise<void> {
-    try {
-      const schemaPath = join(__dirname, '../../schema/backtest_results.schema.json');
-      const schemaData = await fs.readFile(schemaPath, 'utf8');
-      const schema = JSON.parse(schemaData);
-
-      const ajv = new Ajv();
-      const validate = ajv.compile(schema);
-      const valid = validate(results);
-
-      if (!valid) {
-        const errors = validate.errors?.map(err => 
-          `${err.instancePath}: ${err.message}`
-        ).join(', ') || 'Unknown validation error';
-        
-        throw new Error(`Schema validation failed: ${errors}`);
-      }
-
-      log.info('Backtest results validated against schema');
-    } catch (error) {
-      log.error('Schema validation failed', { error });
-      throw error;
-    }
   }
 }
 
@@ -541,20 +429,13 @@ export async function runBacktest(
     const results = await runner.run();
 
     console.log('\n=== BACKTEST RESULTS ===');
-    console.log(`Total Plans: ${results.totalPlans}`);
-    console.log(`Accepted Plans: ${results.acceptedPlans}`);
-    console.log(`Success Rate: ${(results.successRate * 100).toFixed(2)}%`);
-    console.log(`Median Profit: $${results.medianProfitUsd.toFixed(2)}`);
-    console.log(`Worst Profit: $${results.worstProfitUsd.toFixed(2)}`);
+    console.log(`Total Fixtures: ${results.summary.totalFixtures}`);
+    console.log(`Successful Plans: ${results.summary.successfulPlans}`);
+    console.log(`Profitable Executions: ${results.summary.profitableExecutions}`);
+    console.log(`Success Rate: ${(results.summary.successRate * 100).toFixed(2)}%`);
     console.log(`Total Profit: $${results.summary.totalProfitUsd}`);
     console.log(`Average Profit: $${results.summary.averageProfitUsd}`);
     console.log(`Average Execution Time: ${results.summary.averageExecutionTimeMs.toFixed(2)}ms`);
-    console.log('--- Rejection Stats ---');
-    console.log(`Profit Below Threshold: ${results.rejectionStats.profitBelowThreshold}`);
-    console.log(`Min Swap USD Not Met: ${results.rejectionStats.minSwapUsdNotMet}`);
-    console.log(`Liquidity Not Viable: ${results.rejectionStats.liquidityNotViable}`);
-    console.log(`Gas Too High: ${results.rejectionStats.gasTooHigh}`);
-    console.log(`Inclusion Prob Too Low: ${results.rejectionStats.inclusionProbTooLow}`);
     console.log('========================\n');
 
   } catch (error) {
