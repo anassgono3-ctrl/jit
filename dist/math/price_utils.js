@@ -3,16 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sqrtPriceX96ToPrice = sqrtPriceX96ToPrice;
-exports.priceToSqrtPriceX96 = priceToSqrtPriceX96;
-exports.calculatePriceImpact = calculatePriceImpact;
-exports.getPriceAtTick = getPriceAtTick;
-exports.getTickAtPrice = getTickAtPrice;
-exports.formatTokenAmount = formatTokenAmount;
-exports.parseTokenAmount = parseTokenAmount;
-exports.calculateUsdValue = calculateUsdValue;
-exports.getEquivalentToken1Amount = getEquivalentToken1Amount;
-exports.getEquivalentToken0Amount = getEquivalentToken0Amount;
+exports.getEquivalentToken0Amount = exports.getEquivalentToken1Amount = exports.calculateUsdValue = exports.parseTokenAmount = exports.formatTokenAmount = exports.getTickAtPrice = exports.getPriceAtTick = exports.calculatePriceImpact = exports.priceToSqrtPriceX96 = exports.sqrtPriceX96ToPrice = void 0;
 const decimal_js_1 = __importDefault(require("decimal.js"));
 // Configure decimal.js for high precision
 decimal_js_1.default.config({
@@ -38,6 +29,7 @@ function sqrtPriceX96ToPrice(sqrtX96, decimals0, decimals1) {
     const decimalAdjustment = new decimal_js_1.default(10).pow(decimals0).div(new decimal_js_1.default(10).pow(decimals1));
     return price.mul(decimalAdjustment).toString();
 }
+exports.sqrtPriceX96ToPrice = sqrtPriceX96ToPrice;
 /**
  * Converts human readable price to sqrtPriceX96
  * @param price The price as string or number (token1 per token0)
@@ -54,6 +46,7 @@ function priceToSqrtPriceX96(price, decimals0 = 18, decimals1 = 18) {
     const sqrtPrice = adjustedPrice.sqrt().mul(Q96_DECIMAL);
     return BigInt(sqrtPrice.toFixed(0));
 }
+exports.priceToSqrtPriceX96 = priceToSqrtPriceX96;
 /**
  * Calculates the price impact of a swap
  * @param sqrtPriceBefore The sqrt price before swap
@@ -68,6 +61,7 @@ function calculatePriceImpact(sqrtPriceBefore, sqrtPriceAfter, decimals0, decima
     const impact = priceAfter.sub(priceBefore).div(priceBefore).mul(100);
     return impact.toString();
 }
+exports.calculatePriceImpact = calculatePriceImpact;
 /**
  * Gets the price at a specific tick
  * @param tick The tick
@@ -82,6 +76,7 @@ function getPriceAtTick(tick, decimals0, decimals1) {
     const decimalAdjustment = new decimal_js_1.default(10).pow(decimals0).div(new decimal_js_1.default(10).pow(decimals1));
     return price.mul(decimalAdjustment).toString();
 }
+exports.getPriceAtTick = getPriceAtTick;
 /**
  * Gets the tick at a specific price
  * @param price The price (token1 per token0)
@@ -96,8 +91,10 @@ function getTickAtPrice(price, decimals0, decimals1) {
     const adjustedPrice = priceDec.mul(decimalAdjustment);
     // tick = log(price) / log(1.0001)
     const tick = adjustedPrice.ln().div(new decimal_js_1.default(1.0001).ln());
-    return Math.floor(tick.toNumber());
+    // Round down to get the floor tick - use decimal floor instead of Number conversion
+    return tick.floor().toNumber();
 }
+exports.getTickAtPrice = getTickAtPrice;
 /**
  * Formats token amount with proper decimals
  * @param amount Raw token amount (string)
@@ -114,6 +111,7 @@ function formatTokenAmount(amount, decimals, displayDecimals) {
     }
     return formatted.toString();
 }
+exports.formatTokenAmount = formatTokenAmount;
 /**
  * Parses formatted token amount to raw amount
  * @param amount Formatted amount (string)
@@ -125,6 +123,7 @@ function parseTokenAmount(amount, decimals) {
     const multiplier = new decimal_js_1.default(10).pow(decimals);
     return amountDec.mul(multiplier).toFixed(0);
 }
+exports.parseTokenAmount = parseTokenAmount;
 /**
  * Calculates USD value of token amounts
  * @param amount0 Token0 amount (raw)
@@ -142,6 +141,7 @@ function calculateUsdValue(amount0, amount1, decimals0, decimals1, price0Usd, pr
     const value1 = amount1Formatted.mul(new decimal_js_1.default(price1Usd));
     return value0.add(value1).toString();
 }
+exports.calculateUsdValue = calculateUsdValue;
 /**
  * Computes the equivalent token1 amount for a given token0 amount at current price
  * @param amount0 Token0 amount (raw)
@@ -156,6 +156,7 @@ function getEquivalentToken1Amount(amount0, sqrtPriceX96, decimals0, decimals1) 
     const amount1Formatted = new decimal_js_1.default(amount0Formatted).mul(new decimal_js_1.default(price));
     return parseTokenAmount(amount1Formatted.toString(), decimals1);
 }
+exports.getEquivalentToken1Amount = getEquivalentToken1Amount;
 /**
  * Computes the equivalent token0 amount for a given token1 amount at current price
  * @param amount1 Token1 amount (raw)
@@ -170,4 +171,5 @@ function getEquivalentToken0Amount(amount1, sqrtPriceX96, decimals0, decimals1) 
     const amount0Formatted = new decimal_js_1.default(amount1Formatted).div(new decimal_js_1.default(price));
     return parseTokenAmount(amount0Formatted.toString(), decimals0);
 }
+exports.getEquivalentToken0Amount = getEquivalentToken0Amount;
 //# sourceMappingURL=price_utils.js.map

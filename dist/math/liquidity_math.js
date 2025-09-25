@@ -3,14 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liquidityFromToken0 = liquidityFromToken0;
-exports.liquidityFromToken1 = liquidityFromToken1;
-exports.liquidityForAmounts = liquidityForAmounts;
-exports.getAmount0FromLiquidity = getAmount0FromLiquidity;
-exports.getAmount1FromLiquidity = getAmount1FromLiquidity;
-exports.getAmountsFromLiquidity = getAmountsFromLiquidity;
-exports.addLiquidity = addLiquidity;
-exports.subtractLiquidity = subtractLiquidity;
+exports.subtractLiquidity = exports.addLiquidity = exports.getAmountsFromLiquidity = exports.getAmount1FromLiquidity = exports.getAmount0FromLiquidity = exports.liquidityForAmounts = exports.liquidityFromToken1 = exports.liquidityFromToken0 = void 0;
 const decimal_js_1 = __importDefault(require("decimal.js"));
 // Configure decimal.js for high precision
 decimal_js_1.default.config({
@@ -44,6 +37,7 @@ function liquidityFromToken0(amount0, sqrtP, sqrtUpper) {
     const liquidity = numerator.div(denominator).div(Q96_DECIMAL);
     return liquidity.toFixed(0);
 }
+exports.liquidityFromToken0 = liquidityFromToken0;
 /**
  * Computes liquidity from token1 amount for a given price range
  * Formula: L = amount1 / (sqrt(current) - sqrt(lower))
@@ -65,6 +59,7 @@ function liquidityFromToken1(amount1, sqrtP, sqrtLower) {
     const liquidity = amount1Dec.mul(Q96_DECIMAL).div(denominator);
     return liquidity.toFixed(0);
 }
+exports.liquidityFromToken1 = liquidityFromToken1;
 /**
  * Computes the maximum liquidity that can be provided given token amounts and price range
  * @param amount0 The amount of token0 available
@@ -99,6 +94,7 @@ function liquidityForAmounts(amount0, amount1, sqrtLower, sqrtP, sqrtUpper) {
     }
     return liquidity.toFixed(0);
 }
+exports.liquidityForAmounts = liquidityForAmounts;
 /**
  * Computes the token0 amount for a given liquidity and price range
  * Formula: amount0 = L * (sqrt(upper) - sqrt(current)) / (sqrt(upper) * sqrt(current))
@@ -120,6 +116,7 @@ function getAmount0FromLiquidity(liquidity, sqrtP, sqrtUpper) {
     const denominator = sqrtUpperDec.mul(sqrtPDec);
     return numerator.mul(Q96_DECIMAL).div(denominator).toFixed(0);
 }
+exports.getAmount0FromLiquidity = getAmount0FromLiquidity;
 /**
  * Computes the token1 amount for a given liquidity and price range
  * Formula: amount1 = L * (sqrt(current) - sqrt(lower))
@@ -139,6 +136,7 @@ function getAmount1FromLiquidity(liquidity, sqrtP, sqrtLower) {
     // Account for Q96 scaling 
     return liquidityDec.mul(sqrtPDec.sub(sqrtLowerDec)).div(Q96_DECIMAL).toFixed(0);
 }
+exports.getAmount1FromLiquidity = getAmount1FromLiquidity;
 /**
  * Computes both token amounts for a given liquidity and price range
  * @param liquidity The liquidity amount
@@ -153,6 +151,7 @@ function getAmountsFromLiquidity(liquidity, sqrtLower, sqrtP, sqrtUpper) {
         amount1: getAmount1FromLiquidity(liquidity, sqrtP, sqrtLower),
     };
 }
+exports.getAmountsFromLiquidity = getAmountsFromLiquidity;
 /**
  * Adds liquidity amounts (helper for accumulating liquidity across ticks)
  * @param liquidity1 First liquidity amount
@@ -162,6 +161,7 @@ function getAmountsFromLiquidity(liquidity, sqrtLower, sqrtP, sqrtUpper) {
 function addLiquidity(liquidity1, liquidity2) {
     return new decimal_js_1.default(liquidity1).add(new decimal_js_1.default(liquidity2)).toFixed(0);
 }
+exports.addLiquidity = addLiquidity;
 /**
  * Subtracts liquidity amounts (helper for removing liquidity)
  * @param liquidity1 First liquidity amount
@@ -172,4 +172,5 @@ function subtractLiquidity(liquidity1, liquidity2) {
     const result = new decimal_js_1.default(liquidity1).sub(new decimal_js_1.default(liquidity2));
     return result.isNegative() ? '0' : result.toFixed(0);
 }
+exports.subtractLiquidity = subtractLiquidity;
 //# sourceMappingURL=liquidity_math.js.map

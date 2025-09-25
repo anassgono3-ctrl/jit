@@ -3,10 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_SQRT_RATIO = exports.MIN_SQRT_RATIO = exports.MAX_TICK = exports.MIN_TICK = void 0;
-exports.getSqrtRatioAtTick = getSqrtRatioAtTick;
-exports.getTickAtSqrtRatio = getTickAtSqrtRatio;
-exports.nearestUsableTick = nearestUsableTick;
+exports.MAX_SQRT_RATIO = exports.MIN_SQRT_RATIO = exports.MAX_TICK = exports.MIN_TICK = exports.nearestUsableTick = exports.getTickAtSqrtRatio = exports.getSqrtRatioAtTick = void 0;
 const decimal_js_1 = __importDefault(require("decimal.js"));
 // Configure decimal.js for high precision
 decimal_js_1.default.config({
@@ -45,6 +42,7 @@ function getSqrtRatioAtTick(tick) {
     // Convert to bigint, rounding down
     return BigInt(sqrtPriceX96.toFixed(0));
 }
+exports.getSqrtRatioAtTick = getSqrtRatioAtTick;
 /**
  * Returns the tick corresponding to a given sqrt ratio, such that #getSqrtRatioAtTick(tick) <= sqrtRatioX96
  * and #getSqrtRatioAtTick(tick + 1) > sqrtRatioX96
@@ -63,9 +61,10 @@ function getTickAtSqrtRatio(sqrtRatioX96) {
     const price = sqrtPrice.pow(2);
     const base = new decimal_js_1.default(1.0001);
     const tick = price.ln().div(base.ln());
-    // Round down to get the floor tick
-    return Math.floor(tick.toNumber());
+    // Round down to get the floor tick - use decimal floor instead of Number conversion
+    return tick.floor().toNumber();
 }
+exports.getTickAtSqrtRatio = getTickAtSqrtRatio;
 /**
  * Returns the nearest usable tick given a tick and the tick spacing
  * @param tick The tick to round
@@ -93,4 +92,5 @@ function nearestUsableTick(tick, tickSpacing) {
         return rounded;
     }
 }
+exports.nearestUsableTick = nearestUsableTick;
 //# sourceMappingURL=tick_math.js.map
