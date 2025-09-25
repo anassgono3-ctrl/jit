@@ -122,7 +122,8 @@ export function getTickAtPrice(
   // tick = log(price) / log(1.0001)
   const tick = adjustedPrice.ln().div(new Decimal(1.0001).ln());
   
-  return Math.floor(tick.toNumber());
+  // Round down to get the floor tick - use decimal floor instead of Number conversion
+  return tick.floor().toNumber();
 }
 
 /**

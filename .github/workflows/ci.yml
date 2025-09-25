@@ -12,7 +12,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [20.x]
 
     steps:
     - name: Checkout code
@@ -33,16 +33,53 @@ jobs:
     - name: Check formatting
       run: npx prettier --check src tests
 
+    - name: Verify numeric safety
+      run: npm run verify:numeric
+
     - name: Run tests
       run: npm test
 
     - name: Build project
       run: npm run build
 
-    - name: Run backtest (short)
+    - name: Run backtest
       run: npm run backtest
       env:
         NODE_ENV: test
+
+    - name: Validate backtest schema
+      run: |
+        if [ ! -f "./backtest_results.json" ]; then
+          echo "Error: backtest_results.json not found"
+          exit 1
+        fi
+        echo "✅ backtest_results.json generated successfully"
+        # Basic validation that required fields exist
+        jq -e '.successRate' ./backtest_results.json >/dev/null
+        jq -e '.medianProfitUsd' ./backtest_results.json >/dev/null  
+        jq -e '.worstProfitUsd' ./backtest_results.json >/dev/null
+        jq -e '.totalPlans' ./backtest_results.json >/dev/null
+        jq -e '.acceptedPlans' ./backtest_results.json >/dev/null
+        jq -e '.rejectionStats' ./backtest_results.json >/dev/null
+        echo "✅ Required schema fields present"
+
+    - name: Upload backtest artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: backtest-results
+        path: backtest_results.json
+        retention-days: 30
+
+    - name: Print backtest summary
+      run: |
+        echo "## Backtest Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Total Plans | $(jq -r '.totalPlans' ./backtest_results.json) |" >> $GITHUB_STEP_SUMMARY
+        echo "| Accepted Plans | $(jq -r '.acceptedPlans' ./backtest_results.json) |" >> $GITHUB_STEP_SUMMARY
+        echo "| Success Rate | $(jq -r '.successRate * 100 | floor')% |" >> $GITHUB_STEP_SUMMARY
+        echo "| Median Profit | $$(jq -r '.medianProfitUsd' ./backtest_results.json) |" >> $GITHUB_STEP_SUMMARY
+        echo "| Worst Profit | $$(jq -r '.worstProfitUsd' ./backtest_results.json) |" >> $GITHUB_STEP_SUMMARY
 
   docker:
     runs-on: ubuntu-latest
