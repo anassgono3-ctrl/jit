@@ -1,0 +1,46 @@
+{
+  "name": "usdc_eth_500k_swap",
+  "pool": {
+    "config": {
+      "address": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+      "token0": "0xA0b86991c431E56C2e07E8F5c25fe64a7Bc11b3A",
+      "token1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "decimals0": 6,
+      "decimals1": 18
+    },
+    "slot0": {
+      "sqrtPriceX96": "79228162514264337593543950336",
+      "tick": 0,
+      "observationIndex": 0,
+      "observationCardinality": 1,
+      "observationCardinalityNext": 1,
+      "feeProtocol": 0,
+      "unlocked": true
+    },
+    "liquidity": "25000000000000000000000",
+    "feeGrowthGlobal0X128": "0",
+    "feeGrowthGlobal1X128": "0",
+    "protocolFees0": "0",
+    "protocolFees1": "0",
+    "ticks": [],
+    "blockTimestamp": 1700000000
+  },
+  "swap": {
+    "amountIn": "500000000000",
+    "tokenIn": "token0",
+    "swapSizeUsd": "500000",
+    "priceToken1PerToken0": "2000"
+  },
+  "priceFeed": {
+    "token0PriceUsd": "1.0",
+    "token1PriceUsd": "2000.0",
+    "timestamp": 1700000000
+  },
+  "expected": {
+    "shouldExecute": true,
+    "minProfitUsd": "200",
+    "maxProfitUsd": "2000"
+  }
+}

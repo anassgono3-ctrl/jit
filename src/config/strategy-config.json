@@ -1,7 +1,8 @@
 {
   "minSwapUsdByFeeTier": {
     "0.003": 15000,
-    "0.0005": 70000
+    "0.0005": 70000,
+    "0.01": 5000
   },
   "minNetProfitUsd": 25,
   "gasEstimateUsd": 15,

@@ -349,7 +349,7 @@ export function getAdaptiveWeights(
   competition: number
 ): { profitability: number; risk: number; execution: number; competition: number } {
   // Default weights
-  let weights = {
+  const weights = {
     profitability: 0.40,
     risk: 0.25,
     execution: 0.20,
