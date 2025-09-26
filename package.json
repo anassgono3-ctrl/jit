@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "test": "mocha -r ts-node/register tests/**/*.test.ts --timeout 20000",
+    "test:coverage": "nyc --reporter=text --reporter=html --reporter=lcov npm test",
     "backtest": "node -r ts-node/register src/backtest/runner.ts",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
@@ -34,6 +35,7 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@types/chai": "^4.3.6",
     "@types/mocha": "^10.0.2",
     "@types/node": "^20.8.0",
@@ -43,6 +45,7 @@
     "chai": "^4.3.8",
     "eslint": "^8.50.0",
     "mocha": "^10.2.0",
+    "nyc": "^17.1.0",
     "prettier": "^3.0.3",
     "ts-node": "^10.9.1",
     "typescript": "~5.3.3"

@@ -1,0 +1,24 @@
+{
+  "extends": "@istanbuljs/nyc-config-typescript",
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/specs/**",
+    "coverage/**",
+    "dist/**"
+  ],
+  "reporter": [
+    "text",
+    "html",
+    "lcov"
+  ],
+  "report-dir": "coverage",
+  "check-coverage": true,
+  "lines": 44,
+  "functions": 40,
+  "branches": 35,
+  "statements": 44,
+  "_comment": "Thresholds set for current state. New modules should aim for ≥70% coverage."
+}

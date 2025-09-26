@@ -63,10 +63,31 @@
 
 ### Testing Requirements
 
-- Maintain test coverage for critical paths
-- Add boundary tests for math operations
-- Backtest schema validation must pass
-- All tests must pass: `npm test`
+- **Coverage**: Maintain ≥70% test coverage for new modules
+- **Unit Tests**: Every new module requires ≥1 unit test file
+- **Boundary Tests**: Add edge case tests for math operations
+- **Integration Tests**: Test module interactions for critical paths
+- **Config Validation**: Test all config validation scenarios
+- **Error Handling**: Test failure modes and recovery paths
+
+```bash
+# Run tests with coverage
+npm run test:coverage
+
+# Coverage must meet thresholds
+npm run test:coverage -- --check-coverage
+```
+
+### New Module Requirements
+
+When adding new modules, ensure:
+
+1. **Config Integration**: Use `loadConfig()` for environment variables
+2. **Logging**: Use structured logging with appropriate context
+3. **Metrics**: Add relevant metrics using the metrics interface
+4. **Error Handling**: Implement graceful degradation
+5. **Testing**: Comprehensive unit tests with ≥70% coverage
+6. **Documentation**: Update README if user-facing
 
 ### Code Style
 
@@ -84,23 +105,47 @@
 
 ```
 src/
+├── config/         # Environment validation and configuration management
+├── execution/      # Profit guards, gas estimation, simulation hooks
+├── health/         # HTTP health endpoint and status reporting
+├── metrics/        # Observability hooks and metrics interface
+├── runtime/        # Connection management, retry logic, mempool orchestration
 ├── math/           # Core mathematical operations (numeric safety critical)
 ├── sim/            # Simulation engine (numeric safety critical)  
 ├── strategy/       # JIT planning logic
 ├── modules/        # Shared utilities (logger, metrics, db)
-├── runtime/        # Execution environment (mempool, sender)
 ├── backtest/       # Backtesting framework
-└── config/         # Configuration schemas
+└── specs/          # Future component specifications
 ```
 
 ### Logging Standards
 
-Use structured logging with appropriate tags:
-- `[PLAN]` - JIT planning decisions
-- `[EXEC]` - Execution/simulation results
-- `[SIM]` - Simulation engine operations
-- `[ERIGON-TXPOOL]` - Erigon txpool integration
-- `[ETH-PENDING]` - Standard pending tx subscription
+Use structured logging with appropriate context:
+
+```typescript
+import { log } from '../modules/logger';
+
+// Good: Structured with context
+log.info('JIT plan executed', { 
+  poolAddress: '0x123...', 
+  profitUsd: 45.67,
+  gasUsed: 180000 
+});
+
+// Good: Error with details
+log.error('Transaction failed', { 
+  txHash: '0xabc...', 
+  error: error.message,
+  gasPrice: gasPrice.toString()
+});
+```
+
+Module-specific logging patterns:
+- `[PLAN]` - JIT planning decisions → use `log.info()` or `log.logStrategyDecision()`
+- `[EXEC]` - Execution/simulation results → use `log.info()` or `log.logJitAttempt()`
+- `[CONFIG]` - Configuration validation → use structured fields
+- `[HEALTH]` - Health and monitoring → include metrics context
+- Mempool monitoring → use existing patterns in ErigonTxpoolMonitor and PendingTransactionMonitor
 
 ### Error Handling
 
