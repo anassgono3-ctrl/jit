@@ -28,6 +28,12 @@ class Metrics {
   private config: MetricsConfig;
   private defaultMetricsTimer?: NodeJS.Timeout;
 
+  // Core Bot Metrics (as specified in PR)
+  public readonly botTradesExecutedTotal: Counter<string>;
+  public readonly botTradesProfitableTotal: Counter<string>;
+  public readonly botRpcFailuresTotal: Counter<string>;
+  public readonly botBacktestRunsTotal: Counter<string>;
+
   // JIT Strategy Metrics
   public readonly jitAttemptsTotal: Counter<string>;
   public readonly jitSuccessTotal: Counter<string>;
@@ -61,6 +67,31 @@ class Metrics {
 
   constructor(config: Partial<MetricsConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+
+    // Initialize Core Bot Metrics (as specified in PR)
+    this.botTradesExecutedTotal = new Counter({
+      name: `${this.config.prefix}trades_executed_total`,
+      help: 'Total number of trades executed by the bot',
+      labelNames: ['pool_address', 'fee_tier', 'trade_type'],
+    });
+
+    this.botTradesProfitableTotal = new Counter({
+      name: `${this.config.prefix}trades_profitable_total`,
+      help: 'Total number of profitable trades executed by the bot',
+      labelNames: ['pool_address', 'fee_tier'],
+    });
+
+    this.botRpcFailuresTotal = new Counter({
+      name: `${this.config.prefix}rpc_failures_total`,
+      help: 'Total number of RPC failures encountered',
+      labelNames: ['provider_url', 'error_type'],
+    });
+
+    this.botBacktestRunsTotal = new Counter({
+      name: `${this.config.prefix}backtest_runs_total`,
+      help: 'Total number of backtest runs completed',
+      labelNames: ['status'],
+    });
 
     // Initialize JIT Strategy Metrics
     this.jitAttemptsTotal = new Counter({
@@ -201,6 +232,44 @@ class Metrics {
     if (this.config.collectDefault) {
       this.startDefaultMetricsCollection();
     }
+  }
+
+  /**
+   * Record trade execution (Core bot metric)
+   */
+  recordTradeExecuted(poolAddress: string, feeTier: number, tradeType: 'jit' | 'arbitrage'): void {
+    this.botTradesExecutedTotal.inc({
+      pool_address: poolAddress,
+      fee_tier: feeTier.toString(),
+      trade_type: tradeType,
+    });
+  }
+
+  /**
+   * Record profitable trade (Core bot metric)
+   */
+  recordProfitableTrade(poolAddress: string, feeTier: number): void {
+    this.botTradesProfitableTotal.inc({
+      pool_address: poolAddress,
+      fee_tier: feeTier.toString(),
+    });
+  }
+
+  /**
+   * Record RPC failure (Core bot metric)
+   */
+  recordRpcFailure(providerUrl: string, errorType: string): void {
+    this.botRpcFailuresTotal.inc({
+      provider_url: providerUrl,
+      error_type: errorType,
+    });
+  }
+
+  /**
+   * Record backtest run (Core bot metric)
+   */
+  recordBacktestRun(status: 'success' | 'failure'): void {
+    this.botBacktestRunsTotal.inc({ status });
   }
 
   /**
@@ -373,10 +442,12 @@ export function createMetrics(config: Partial<MetricsConfig> = {}): Metrics {
 }
 
 /**
- * Middleware to create HTTP server for metrics endpoint
+ * Create HTTP server for metrics endpoint
+ * Serves Prometheus-compatible metrics at /metrics endpoint
  */
 export function createMetricsServer(port: number = 9090): void {
   const http = require('http');
+  const { log } = require('./logger');
   
   const server = http.createServer(async (req: unknown, res: unknown) => {
     // Type assertions for basic HTTP server
@@ -386,21 +457,41 @@ export function createMetricsServer(port: number = 9090): void {
       end: (data?: string) => void;
     };
 
-    if (request.url === '/metrics' && request.method === 'GET') {
-      const metricsData = await metrics.getMetrics();
-      response.writeHead(200, { 'Content-Type': 'text/plain' });
-      response.end(metricsData);
-    } else if (request.url === '/health' && request.method === 'GET') {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }));
-    } else {
-      response.writeHead(404);
+    try {
+      if (request.url === '/metrics' && request.method === 'GET') {
+        const metricsData = await metrics.getMetrics();
+        response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(metricsData);
+        return;
+      }
+
+      if (request.url === '/health' && request.method === 'GET') {
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ 
+          status: 'healthy', 
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime()
+        }));
+        return;
+      }
+
+      // 404 for other paths
+      response.writeHead(404, { 'Content-Type': 'text/plain' });
       response.end('Not Found');
+    } catch (error) {
+      log.error('Metrics server error', { error });
+      response.writeHead(500, { 'Content-Type': 'text/plain' });
+      response.end('Internal Server Error');
     }
   });
 
   server.listen(port, () => {
-    console.log(`Metrics server listening on port ${port}`);
+    log.info(`Metrics server listening on port ${port}`);
+    log.info(`Metrics endpoint: http://localhost:${port}/metrics`);
+  });
+
+  server.on('error', (error: Error) => {
+    log.error('Metrics server error', { error, port });
   });
 }
 
