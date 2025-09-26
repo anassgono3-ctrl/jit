@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "test": "mocha -r ts-node/register tests/**/*.test.ts --timeout 20000",
+    "test": "mocha -r ts-node/register -r dotenv/config tests/**/*.test.ts --timeout 20000",
     "test:coverage": "nyc --reporter=text --reporter=html --reporter=lcov npm test",
     "backtest": "node -r ts-node/register src/backtest/runner.ts",
     "lint": "eslint src tests --ext .ts",
