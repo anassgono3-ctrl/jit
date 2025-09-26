@@ -6,30 +6,40 @@
  *  - PRIVATE_KEY must match /^0x[0-9a-fA-F]{64}$/ (64 hex bytes)
  */
 
+// Load .env first before any other imports
+import 'dotenv/config';
+
+import { loadConfig, getConfigSummary } from './config';
 import { log } from './modules/logger';
 
 // --- Live-Mode Guard (place before any network connections or async init) ---
 (function enforceLiveModeSafety() {
-  const dryRun = (process.env.DRY_RUN ?? 'true').toLowerCase() === 'true';
-  if (dryRun) {
-    log.info('[STARTUP] DRY_RUN=true (simulation mode). Skipping PRIVATE_KEY validation.');
-    return;
-  }
-
-  const pk = process.env.PRIVATE_KEY;
-  const validFormat = typeof pk === 'string' && /^0x[0-9a-fA-F]{64}$/.test(pk);
-
-  if (!validFormat) {
-    if (!pk) {
-      log.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.');
-    } else {
-      log.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).');
+  try {
+    const config = loadConfig();
+    
+    if (config.DRY_RUN) {
+      log.info('[STARTUP] DRY_RUN=true (simulation mode). Skipping PRIVATE_KEY validation.');
+      return;
     }
+
+    if (!config.PRIVATE_KEY) {
+      log.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.');
+      log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
+      process.exit(1);
+    }
+
+    if (!/^0x[0-9a-fA-F]{64}$/.test(config.PRIVATE_KEY)) {
+      log.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).');
+      log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
+      process.exit(1);
+    }
+
+    log.info('[STARTUP] Live-mode key validated; proceeding...');
+  } catch (error) {
+    log.error('[STARTUP] Config validation failed:', error instanceof Error ? error : new Error(String(error)));
     log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
     process.exit(1);
   }
-
-  log.info('[STARTUP] Live-mode key validated; proceeding...');
 })();
 
 // ---------------------------------------------------------------------------
@@ -39,13 +49,10 @@ import { log } from './modules/logger';
 async function main() {
   log.info('[STARTUP] JIT Liquidity Bot starting...');
   
-  // Log startup configuration
-  log.info('[STARTUP] Configuration:', {
-    dryRun: process.env.DRY_RUN,
-    network: process.env.NETWORK,
-    logLevel: process.env.LOG_LEVEL,
-    metricsPort: process.env.METRICS_PORT,
-  });
+  // Load and log configuration
+  const config = loadConfig();
+  const configSummary = getConfigSummary();
+  log.info('[STARTUP] Resolved config', configSummary);
 
   // TODO: Initialize main bot components
   // - Strategy engine

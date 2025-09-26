@@ -5,6 +5,8 @@ import { selectRange } from './range_selection';
 import { estimateInclusionProbability, scorePlan } from './scoring';
 import { liquidityForAmounts, getAmountsFromLiquidity } from '../math/liquidity_math';
 import { calculateUsdValue } from '../math/price_utils';
+import { evaluatePlan } from './profitability';
+import { SimulationResult, ProfitabilityConfig } from './types';
 
 // Configure decimal.js for high precision
 Decimal.config({
@@ -162,7 +164,31 @@ export function planJit(
       return null;
     }
 
-    // 9. Calculate final score
+    // 9. Profitability strategy evaluation
+    const simResult: SimulationResult = {
+      feesToken0Usd: estimatedFeesUsd.toNumber() / 2, // Split fees evenly as approximation
+      feesToken1Usd: estimatedFeesUsd.toNumber() / 2,
+      flashloanFeesUsd: flashloanCostUsd.toNumber(),
+      gasUsd: gasCostUsd,
+      estimatedGas: 200000, // Rough estimate for JIT operations
+      gasPriceGwei: swapEstimate.priorityFeeGwei,
+      ethUsdPrice: parseFloat(priceFeed.token0PriceUsd) // Convert string to number
+    };
+
+    const profitabilityConfig: ProfitabilityConfig = {
+      minProfitUsd: config.minNetProfitUsd,
+      captureFraction: config.captureFractionDefault,
+      inclusionProbability: config.inclusionProbabilityDefault
+    };
+
+    const decision = evaluatePlan(simResult, profitabilityConfig);
+    if (!decision.accept) {
+      // TODO: Add proper logging here in production
+      // log.info({ reason: decision.reason, expectedNetUsd: decision.expectedNetUsd }, '[STRATEGY] Plan rejected by profitability module');
+      return null;
+    }
+
+    // 10. Calculate final score
     const plan: JitPlan = {
       lowerTick,
       upperTick,
@@ -170,16 +196,19 @@ export function planJit(
       amount1,
       liquidity: requiredLiquidity.toString(),
       expectedFeeUsd: estimatedFeesUsd.toString(),
-      expectedNetUsd: riskAdjustedProfitUsd.toString(),
-      score: 0, // Will be calculated next
+      expectedNetUsd: decision.expectedNetUsd.toString(), // Use strategy decision result
+      score: decision.score, // Use strategy score
     };
 
-    plan.score = scorePlan(plan, {
+    // Final score refinement with existing scoring logic
+    const finalScore = scorePlan(plan, {
       swapSizeUsd: swapEstimate.swapSizeUsd,
       inclusionProbability,
       gasCompetition: config.competitionFactor,
       poolLiquidity: poolState.liquidity,
     });
+    
+    plan.score = Math.max(plan.score, finalScore); // Use the higher score
 
     return plan;
 

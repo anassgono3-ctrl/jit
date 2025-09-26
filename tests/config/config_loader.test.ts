@@ -10,6 +10,8 @@ describe('Config Loader', () => {
     delete process.env.PRIMARY_RPC_HTTP;
     delete process.env.RPC_PROVIDERS;
     delete process.env.MIN_PROFIT_USD;
+    delete process.env.CAPTURE_FRACTION;
+    delete process.env.INCLUSION_PROBABILITY;
   });
 
   it('loads defaults in dry run', () => {
@@ -18,8 +20,32 @@ describe('Config Loader', () => {
     const cfg = loadConfig();
     expect(cfg.DRY_RUN).to.be.true;
     expect(cfg.NETWORK).to.equal('mainnet');
-    expect(cfg.MIN_PROFIT_USD).to.equal(0);
+    expect(cfg.MIN_PROFIT_USD).to.equal(25); // Updated default
+    expect(cfg.CAPTURE_FRACTION).to.equal(0.7);
+    expect(cfg.INCLUSION_PROBABILITY).to.equal(0.35);
     expect(cfg.LOG_LEVEL).to.equal('info');
+  });
+
+  it('parses DRY_RUN=false correctly', () => {
+    process.env.DRY_RUN = 'false';
+    process.env.PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
+    const cfg = loadConfig();
+    expect(cfg.DRY_RUN).to.be.false;
+  });
+
+  it('parses DRY_RUN=true explicitly', () => {
+    process.env.DRY_RUN = 'true';
+    process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
+    const cfg = loadConfig();
+    expect(cfg.DRY_RUN).to.be.true;
+  });
+
+  it('defaults DRY_RUN to true when undefined', () => {
+    // DRY_RUN not set
+    process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
+    const cfg = loadConfig();
+    expect(cfg.DRY_RUN).to.be.true;
   });
 
   it('requires PRIVATE_KEY in live mode', () => {
@@ -44,6 +70,18 @@ describe('Config Loader', () => {
     expect(cfg.PRIVATE_KEY).to.equal(process.env.PRIVATE_KEY);
   });
 
+  it('parses numeric config correctly', () => {
+    process.env.DRY_RUN = 'true';
+    process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
+    process.env.MIN_PROFIT_USD = '50';
+    process.env.CAPTURE_FRACTION = '0.8';
+    process.env.INCLUSION_PROBABILITY = '0.4';
+    const cfg = loadConfig();
+    expect(cfg.MIN_PROFIT_USD).to.equal(50);
+    expect(cfg.CAPTURE_FRACTION).to.equal(0.8);
+    expect(cfg.INCLUSION_PROBABILITY).to.equal(0.4);
+  });
+
   it('requires at least one RPC provider', () => {
     process.env.DRY_RUN = 'true';
     expect(() => loadConfig()).to.throw(/At least one RPC provider required/);
@@ -62,17 +100,21 @@ describe('Config Loader', () => {
     expect(() => loadConfig()).to.throw(/Invalid RPC_PROVIDERS JSON/);
   });
 
-  it('provides config summary', () => {
+  it('provides config summary with new fields', () => {
     process.env.DRY_RUN = 'true';
     process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
     process.env.MIN_PROFIT_USD = '50';
+    process.env.CAPTURE_FRACTION = '0.8';
+    process.env.INCLUSION_PROBABILITY = '0.4';
     const summary = getConfigSummary();
     expect(summary).to.include({
       dryRun: true,
       network: 'mainnet',
       hasPrivateKey: false,
       hasPrimaryRpc: true,
-      minProfitUsd: 50
+      minProfitUsd: 50,
+      captureFraction: 0.8,
+      inclusionProbability: 0.4
     });
   });
 
