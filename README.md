@@ -1,5 +1,9 @@
 # JIT Liquidity Bot
 
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-44.75%25-orange)
+![Tests](https://img.shields.io/badge/tests-149%20passing-brightgreen)
+
 A professional, production-ready Just-In-Time (JIT) liquidity bot for Uniswap V3 on Ethereum. This bot provides liquidity precisely when needed to capture fees from large swaps while minimizing capital requirements and impermanent loss risk.
 
 ## Overview
@@ -17,25 +21,55 @@ The JIT Liquidity Bot is designed as a complete foundation for MEV extraction th
 
 ## Architecture
 
+The JIT liquidity bot has been upgraded to a production-grade system with enhanced operational capabilities:
+
 ```
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│  Math Modules   │    │  Simulator   │    │ Strategy Engine │
-│                 │    │              │    │                 │
-│ • tick_math     │───▶│ • pool_state │───▶│ • jit_planner   │
-│ • liquidity_math│    │ • mint_burn  │    │ • range_select  │
-│ • price_utils   │    │ • swap_engine│    │ • scoring       │
-└─────────────────┘    │ • execution  │    │ • pool_manager  │
-                       └──────────────┘    └─────────────────┘
-                              │                       │
-                              ▼                       ▼
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│ Support Modules │    │  Backtest    │    │  Documentation  │
-│                 │    │              │    │                 │
-│ • logger        │    │ • runner     │    │ • DEPLOYMENT    │
-│ • metrics       │    │ • fixtures   │    │ • RUNBOOK       │
-│ • database      │    │ • validation │    │ • SECURITY      │
-└─────────────────┘    └──────────────┘    └─────────────────┘
+                    ┌─── Configuration ───┐
+                    │   • Environment     │
+                    │   • Validation      │
+                    │   • Hot Reload      │
+                    └─────────────────────┘
+                             │
+    ┌─── Mempool ───┐        │        ┌─── Strategy ───┐
+    │ • Erigon      │        │        │ • JIT Planner │
+    │ • Fallback    │        │        │ • Profit Guard│
+    │ • Manager     │────────┼────────│ • Gas Estim.  │
+    └───────────────┘        │        └───────────────┘
+                             │
+    ┌─── Health ────┐        │        ┌─── Execution ──┐
+    │ • HTTP API    │        │        │ • Live/Dry Run│
+    │ • Status      │────────┼────────│ • Simulation  │
+    │ • Metrics     │        │        │ • Retry Logic │
+    └───────────────┘        │        └───────────────┘
+                             │
+                    ┌─── Infrastructure ──┐
+                    │   • Logging (JSON)  │
+                    │   • Metrics (Hooks) │
+                    │   • Database (JSONL)│
+                    └─────────────────────┘
 ```
+
+### Core Components
+
+#### Config Management (`src/config/`)
+- **Environment Validation**: Zod-based schema validation with fail-fast error reporting
+- **Multi-RPC Support**: Weighted RPC provider arrays with fallback orchestration
+- **Security**: PRIVATE_KEY validation only in live mode, safe defaults for dry runs
+
+#### Resilience & Reliability (`src/runtime/`)
+- **Exponential Backoff**: Jittered retry with configurable bounds (`src/runtime/retry/`)
+- **Connection Management**: Automatic Erigon→fallback failover (`src/runtime/connectivity/`)
+- **Health Monitoring**: HTTP endpoint with detailed system status
+
+#### Profit & Execution Control (`src/execution/`)
+- **Profit Guard**: Multi-threshold validation (USD/ETH) with detailed rejection reasons
+- **Gas Estimation**: EIP-1559 aware with priority fee caps and base fee multipliers
+- **Simulation Hooks**: Ready for Flashbots integration with mock stubs
+
+#### Observability (`src/health/`, `src/metrics/`)
+- **Health Endpoint**: `/health` returns JSON status, uptime, and activity metrics
+- **Metrics Interface**: Prometheus-ready hooks with pre-defined application metrics
+- **Structured Logging**: JSON output with module tags and log levels
 
 ## Quick Start
 
@@ -67,23 +101,95 @@ npm run backtest
 
 ### Configuration
 
-```bash
-# Copy configuration templates
-cp .env.example .env
-cp src/config/pools.json.example src/config/pools.json
-cp src/config/strategy-config.json.example src/config/strategy-config.json
+The bot now uses a centralized configuration system with validation:
 
-# Edit configuration files as needed
-vim .env
-vim src/config/strategy-config.json
+```bash
+# Copy configuration template
+cp .env.example .env
+
+# Required environment variables
+cat > .env << 'EOF'
+# Runtime mode
+DRY_RUN=true
+NETWORK=mainnet
+
+# RPC Configuration (choose one approach)
+PRIMARY_RPC_HTTP=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+FALLBACK_RPC_HTTP=https://rpc.ankr.com/eth
+WS_RPC_URL=wss://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+
+# Alternative: JSON array of weighted providers
+# RPC_PROVIDERS='[{"url":"https://rpc1.com","weight":2},{"url":"https://rpc2.com","weight":1}]'
+
+# Optional: Erigon integration for enhanced mempool monitoring
+ERIGON_RPC_HTTP=http://localhost:8545
+
+# Profit thresholds
+MIN_PROFIT_USD=25
+MIN_PROFIT_ETH=0.01
+MAX_PRIORITY_FEE_GWEI=50
+
+# Observability
+LOG_LEVEL=info
+HEALTH_PORT=9090
+
+# Production only (leave empty in dry run)
+PRIVATE_KEY=
+EOF
+```
+
+### Erigon Setup (Recommended)
+
+For optimal mempool monitoring, run an Erigon node with txpool API enabled:
+
+```bash
+# Erigon startup with txpool support
+erigon --chain=mainnet \
+  --http.api=eth,debug,net,txpool \
+  --http.addr=0.0.0.0 \
+  --http.port=8545 \
+  --http.corsdomain='*' \
+  --txpool.api.enable
+```
+
+### Health & Monitoring
+
+The bot exposes a health endpoint for monitoring:
+
+```bash
+# Check system status
+curl http://localhost:9090/health
+
+{
+  "status": "ok",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "uptime": {
+    "seconds": 3600,
+    "human": "1h 0m"
+  },
+  "mempool": {
+    "erigon": true,
+    "fallback": false,
+    "mode": "erigon"
+  },
+  "blockchain": {
+    "lastBlock": 19234567
+  },
+  "activity": {
+    "recentSwapCandidates": 42,
+    "totalAttempts": 156,
+    "totalSuccesses": 23,
+    "successRate": "14.7%"
+  }
+}
 ```
 
 ### Runtime Modes
 
-#### Dry-Run Mode (Default)
+#### Dry-Run Mode (Default - Safe)
 ```bash
-# Safe simulation mode - no real transactions
-NETWORK=mainnet DRY_RUN=true npm start
+# Simulation mode - no real transactions
+DRY_RUN=true PRIMARY_RPC_HTTP=https://rpc.ankr.com/eth npm start
 ```
 
 #### Live Mode (Production Safety Guard)

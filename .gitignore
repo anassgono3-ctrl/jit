@@ -59,4 +59,4 @@ backtest_results.json
 backtest_*.json
 
 # Metrics and monitoring
-prometheus_data/
+prometheus_data/.nyc_output/
