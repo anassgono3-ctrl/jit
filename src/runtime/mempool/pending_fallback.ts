@@ -49,15 +49,17 @@ export class PendingTransactionMonitor {
       });
 
       // Handle WebSocket connection errors
-      this.provider.websocket.on('error', (error: Error) => {
-        log.error('[ETH-PENDING] WebSocket error', { error });
-        this.handleConnectionError();
-      });
+      if (this.provider.websocket && 'on' in this.provider.websocket) {
+        (this.provider.websocket as any).on('error', (error: Error) => {
+          log.error('[ETH-PENDING] WebSocket error', { error });
+          this.handleConnectionError();
+        });
 
-      this.provider.websocket.on('close', () => {
-        log.warn('[ETH-PENDING] WebSocket connection closed');
-        this.handleConnectionError();
-      });
+        (this.provider.websocket as any).on('close', () => {
+          log.warn('[ETH-PENDING] WebSocket connection closed');
+          this.handleConnectionError();
+        });
+      }
 
     } catch (error) {
       this.isRunning = false;
