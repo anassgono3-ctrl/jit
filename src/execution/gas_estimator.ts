@@ -12,6 +12,9 @@ export interface GasEstimatorConfig {
   priorityFeeCapGwei?: number;
   defaultPriorityFeeGwei?: number;
   maxBaseFeeMultiplier?: number;
+  // New EIP-1559 bounds
+  priorityFeeMinGwei?: number;
+  priorityFeeMaxGwei?: number;
 }
 
 export async function estimateGasFees(cfg: GasEstimatorConfig): Promise<GasEstimate> {
@@ -21,16 +24,43 @@ export async function estimateGasFees(cfg: GasEstimatorConfig): Promise<GasEstim
   }
 
   const baseFee = block.baseFeePerGas;
-  const priorityGwei = BigInt(Math.floor((cfg.defaultPriorityFeeGwei ?? 1) * 1e9));
-  const capPriority = cfg.priorityFeeCapGwei
-    ? BigInt(Math.floor(cfg.priorityFeeCapGwei * 1e9))
-    : priorityGwei;
-
-  const maxPriorityFeePerGas = priorityGwei > capPriority ? capPriority : priorityGwei;
   
-  // Use a multiplier for baseFee to account for potential base fee increases
-  const baseFeeMultiplier = BigInt(Math.floor((cfg.maxBaseFeeMultiplier ?? 2) * 100));
-  const maxFeePerGas = (baseFee * baseFeeMultiplier) / 100n + maxPriorityFeePerGas;
+  // Handle backward compatibility first
+  if (cfg.priorityFeeCapGwei !== undefined && cfg.priorityFeeMinGwei === undefined && cfg.priorityFeeMaxGwei === undefined) {
+    // Legacy mode: use priorityFeeCapGwei as a simple cap
+    const defaultPriorityFeeGwei = cfg.defaultPriorityFeeGwei ?? 1;
+    const cappedPriorityFeeGwei = Math.min(defaultPriorityFeeGwei, cfg.priorityFeeCapGwei);
+    const maxPriorityFeePerGas = BigInt(Math.floor(cappedPriorityFeeGwei * 1e9));
+    
+    const baseFeeMultiplier = cfg.maxBaseFeeMultiplier ?? 2.0;
+    const adjustedBaseFee = BigInt(Math.floor(Number(baseFee) * baseFeeMultiplier));
+    const maxFeePerGas = adjustedBaseFee + maxPriorityFeePerGas;
+
+    return {
+      baseFee,
+      maxPriorityFeePerGas,
+      maxFeePerGas
+    };
+  }
+  
+  // New logic with bounds
+  const minPriorityFeeGwei = cfg.priorityFeeMinGwei ?? 1;
+  const maxPriorityFeeGwei = cfg.priorityFeeMaxGwei ?? 
+    (cfg.priorityFeeCapGwei ?? 3); // Backward compatibility fallback
+  const defaultPriorityFeeGwei = cfg.defaultPriorityFeeGwei ?? minPriorityFeeGwei;
+  
+  // Clamp priority fee between min and max bounds
+  const clampedPriorityFeeGwei = Math.max(
+    minPriorityFeeGwei,
+    Math.min(maxPriorityFeeGwei, defaultPriorityFeeGwei)
+  );
+  
+  const maxPriorityFeePerGas = BigInt(Math.floor(clampedPriorityFeeGwei * 1e9));
+  
+  // Apply conservative base fee multiplier with bounds
+  const baseFeeMultiplier = cfg.maxBaseFeeMultiplier ?? 2.0;
+  const adjustedBaseFee = BigInt(Math.floor(Number(baseFee) * baseFeeMultiplier));
+  const maxFeePerGas = adjustedBaseFee + maxPriorityFeePerGas;
 
   return {
     baseFee,

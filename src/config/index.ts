@@ -27,6 +27,27 @@ const configSchema = z.object({
       throw new Error('Invalid RPC_PROVIDERS JSON'); 
     }
   }).optional(),
+  // Multi-RPC Failover
+  RPC_HTTP_LIST: z.string().transform(val => {
+    if (!val) return [];
+    try {
+      // Try parsing as JSON first (weighted format)
+      return rpcArraySchema.parse(JSON.parse(val));
+    } catch {
+      // Fall back to comma-separated format
+      return val.split(',').map(url => ({ url: url.trim(), weight: 1 }));
+    }
+  }).optional(),
+  // Gas Strategy (EIP-1559)
+  GAS_BASEFEE_BUMP: z.coerce.number().min(1).default(2.0),
+  PRIORITY_FEE_GWEI_MIN: z.coerce.number().min(0).default(1),
+  PRIORITY_FEE_GWEI_MAX: z.coerce.number().min(0).default(3),
+  // Flashbots Integration
+  FLASHBOTS_RPC_URL: z.string().url().optional(),
+  SIM_TIMEOUT_MS: z.coerce.number().int().min(100).default(3000),
+  // Metrics
+  METRICS_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
+  // Existing
   MIN_PROFIT_USD: z.coerce.number().min(0).default(0),
   MIN_PROFIT_ETH: z.coerce.number().min(0).default(0),
   MAX_PRIORITY_FEE_GWEI: z.coerce.number().min(0).optional(),
@@ -61,8 +82,10 @@ export function loadConfig(): AppConfig {
   }
   
   // Require at least one RPC provider
-  if (!parsed.PRIMARY_RPC_HTTP && (!parsed.RPC_PROVIDERS || parsed.RPC_PROVIDERS.length === 0)) {
-    throw new Error('At least one RPC provider required (PRIMARY_RPC_HTTP or RPC_PROVIDERS)');
+  if (!parsed.PRIMARY_RPC_HTTP && 
+      (!parsed.RPC_PROVIDERS || parsed.RPC_PROVIDERS.length === 0) &&
+      (!parsed.RPC_HTTP_LIST || parsed.RPC_HTTP_LIST.length === 0)) {
+    throw new Error('At least one RPC provider required (PRIMARY_RPC_HTTP, RPC_PROVIDERS, or RPC_HTTP_LIST)');
   }
   
   cached = parsed;
@@ -80,10 +103,17 @@ export function getConfigSummary(): Record<string, unknown> {
     network: config.NETWORK,
     hasPrivateKey: !!config.PRIVATE_KEY,
     rpcProviders: config.RPC_PROVIDERS?.length || 0,
+    rpcHttpList: config.RPC_HTTP_LIST?.length || 0,
     hasPrimaryRpc: !!config.PRIMARY_RPC_HTTP,
     hasFallbackRpc: !!config.FALLBACK_RPC_HTTP,
     hasErigonRpc: !!config.ERIGON_RPC_HTTP,
     hasWsRpc: !!config.WS_RPC_URL,
+    gasBaseFeeMultiplier: config.GAS_BASEFEE_BUMP,
+    priorityFeeMinGwei: config.PRIORITY_FEE_GWEI_MIN,
+    priorityFeeMaxGwei: config.PRIORITY_FEE_GWEI_MAX,
+    hasFlashbotsRpc: !!config.FLASHBOTS_RPC_URL,
+    simTimeoutMs: config.SIM_TIMEOUT_MS,
+    metricsPort: config.METRICS_PORT,
     minProfitUsd: config.MIN_PROFIT_USD,
     minProfitEth: config.MIN_PROFIT_ETH,
     logLevel: config.LOG_LEVEL,
