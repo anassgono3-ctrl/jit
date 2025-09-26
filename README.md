@@ -129,6 +129,10 @@ MIN_PROFIT_USD=25
 MIN_PROFIT_ETH=0.01
 MAX_PRIORITY_FEE_GWEI=50
 
+# Profitability strategy parameters
+CAPTURE_FRACTION=0.7
+INCLUSION_PROBABILITY=0.35
+
 # Observability
 LOG_LEVEL=info
 HEALTH_PORT=9090
@@ -213,6 +217,22 @@ DRY_RUN=false PRIVATE_KEY=0x123 npm start
 # Valid key format - proceeds normally
 DRY_RUN=false PRIVATE_KEY=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef npm start
 # Output: [STARTUP] Live-mode key validated; proceeding...
+```
+
+**Config Verification:**
+After successful startup, you'll see a config summary log (without sensitive data):
+```json
+{
+  "msg": "[STARTUP] Resolved config",
+  "dryRun": false,
+  "network": "mainnet", 
+  "hasPrivateKey": true,
+  "minProfitUsd": 25,
+  "captureFraction": 0.7,
+  "inclusionProbability": 0.35,
+  "hasPrimaryRpc": true,
+  "logLevel": "info"
+}
 ```
 
 #### Erigon Integration
@@ -333,6 +353,23 @@ if (plan && plan.expectedNetUsd > minProfit) {
   "flashloanFeeBps": 5
 }
 ```
+
+### Environment Variables for Profitability Strategy
+
+The bot now includes advanced profitability evaluation with configurable parameters:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MIN_PROFIT_USD` | `25` | Minimum expected net profit in USD to accept a plan |
+| `CAPTURE_FRACTION` | `0.7` | Expected fraction of fees captured (0.0-1.0) |
+| `INCLUSION_PROBABILITY` | `0.35` | Expected probability of transaction inclusion (0.0-1.0) |
+
+**Profitability Calculation:**
+```
+expectedNetUsd = (grossFees * captureFraction * inclusionProbability) - gasCosts
+```
+
+The strategy module evaluates each JIT plan and rejects those below the configured thresholds, helping to optimize for profitable opportunities while accounting for MEV competition and gas costs.
 
 ## Testing
 

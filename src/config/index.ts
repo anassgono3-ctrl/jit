@@ -27,8 +27,10 @@ const configSchema = z.object({
       throw new Error('Invalid RPC_PROVIDERS JSON'); 
     }
   }).optional(),
-  MIN_PROFIT_USD: z.coerce.number().min(0).default(0),
+  MIN_PROFIT_USD: z.coerce.number().min(0).default(25),
   MIN_PROFIT_ETH: z.coerce.number().min(0).default(0),
+  CAPTURE_FRACTION: z.coerce.number().min(0).max(1).default(0.7),
+  INCLUSION_PROBABILITY: z.coerce.number().min(0).max(1).default(0.35),
   MAX_PRIORITY_FEE_GWEI: z.coerce.number().min(0).optional(),
   LOG_LEVEL: z.enum(['debug','info','warn','error']).default('info'),
   HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
@@ -43,9 +45,10 @@ export function loadConfig(): AppConfig {
   
   const raw: Record<string, unknown> = { ...process.env };
   
-  // Normalize booleans
+  // Normalize booleans - handle "false" vs undefined properly
   if ('DRY_RUN' in raw) {
-    raw.DRY_RUN = String(raw.DRY_RUN).toLowerCase() === 'true';
+    const val = String(raw.DRY_RUN).trim().toLowerCase();
+    raw.DRY_RUN = val === 'true';
   }
 
   const parsed = configSchema.parse(raw);
@@ -86,6 +89,8 @@ export function getConfigSummary(): Record<string, unknown> {
     hasWsRpc: !!config.WS_RPC_URL,
     minProfitUsd: config.MIN_PROFIT_USD,
     minProfitEth: config.MIN_PROFIT_ETH,
+    captureFraction: config.CAPTURE_FRACTION,
+    inclusionProbability: config.INCLUSION_PROBABILITY,
     logLevel: config.LOG_LEVEL,
     healthPort: config.HEALTH_PORT
   };
