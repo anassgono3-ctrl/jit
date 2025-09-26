@@ -13,63 +13,87 @@ The JIT Liquidity Bot is designed as a complete foundation for MEV extraction th
 ### Key Features
 
 - **Exact Uniswap V3 Math**: Precise tick ↔ sqrtPriceX96 conversions using decimal.js
-- **Deterministic Simulation**: Complete offline simulation of mint → swap → burn cycles
+- **Deterministic Simulation**: Complete offline simulation of mint → swap → burn cycles  
 - **Advanced Strategy Engine**: Multi-factor scoring with adaptive range selection
 - **Risk Management**: Position sizing, exposure limits, and emergency controls
+- **Multi-RPC Failover**: Weighted round-robin with circuit breakers and health checks
+- **EIP-1559 Gas Strategy**: Dynamic fee estimation with conservative bounds
+- **Flashbots Integration**: Pre-send simulation to prevent reverting transactions
+- **Prometheus Metrics**: Production-ready observability and monitoring
 - **Production Infrastructure**: Comprehensive logging, metrics, and persistence
-- **Comprehensive Testing**: 88 passing unit tests with full coverage
+- **Comprehensive Testing**: 150+ passing unit tests with full coverage
 
 ## Architecture
 
-The JIT liquidity bot has been upgraded to a production-grade system with enhanced operational capabilities:
+The JIT liquidity bot is a production-grade system with enhanced operational capabilities:
 
 ```
-                    ┌─── Configuration ───┐
-                    │   • Environment     │
-                    │   • Validation      │
-                    │   • Hot Reload      │
-                    └─────────────────────┘
-                             │
-    ┌─── Mempool ───┐        │        ┌─── Strategy ───┐
-    │ • Erigon      │        │        │ • JIT Planner │
-    │ • Fallback    │        │        │ • Profit Guard│
-    │ • Manager     │────────┼────────│ • Gas Estim.  │
-    └───────────────┘        │        └───────────────┘
-                             │
-    ┌─── Health ────┐        │        ┌─── Execution ──┐
-    │ • HTTP API    │        │        │ • Live/Dry Run│
-    │ • Status      │────────┼────────│ • Simulation  │
-    │ • Metrics     │        │        │ • Retry Logic │
-    └───────────────┘        │        └───────────────┘
-                             │
-                    ┌─── Infrastructure ──┐
-                    │   • Logging (JSON)  │
-                    │   • Metrics (Hooks) │
-                    │   • Database (JSONL)│
-                    └─────────────────────┘
+                    ┌─── Multi-RPC Failover ────┐
+                    │  • Round-robin Selection  │
+                    │  • Circuit Breakers       │
+                    │  • Health Monitoring      │
+                    │  • Exponential Backoff    │
+                    └───────────┬───────────────┘
+                                │
+      ┌─── Mempool ────┐        │        ┌──── Strategy ────┐
+      │ • Erigon       │        │        │ • JIT Planner    │
+      │ • Fallback     │        │        │ • Profit Guard   │
+      │ • Manager      │────────┼────────│ • EIP-1559 Gas   │
+      └────────────────┘        │        └──────────────────┘
+                                │
+                       ┌────────┴─────────┐
+                       │                  │
+      ┌─── Flashbots ──┐        │        ┌─── Execution ────┐
+      │ • Simulation   │        │        │ • Live/Dry Run   │
+      │ • Profit Check │────────┼────────│ • Bundle Submit  │
+      │ • Revert Guard │        │        │ • Retry Logic    │
+      └────────────────┘        │        └──────────────────┘
+                                │
+      ┌─── Metrics ────┐        │        ┌─── Health API ───┐
+      │ • Prometheus   │        │        │ • Status Check   │
+      │ • /metrics     │────────┼────────│ • System Info    │
+      │ • Counters     │        │        │ • Error Reports  │
+      └────────────────┘        │        └──────────────────┘
+                                │
+                    ┌───────────┴───────────────┐
+                    │      Configuration        │
+                    │  • Environment Variables  │
+                    │  • Validation & Parsing   │
+                    │  • Hot Reload Support     │
+                    └───────────────────────────┘
 ```
 
 ### Core Components
 
+#### Multi-RPC Failover (`src/runtime/providers/`)
+- **Weighted Round-Robin**: Distribute requests across multiple RPC endpoints with configurable weighting
+- **Circuit Breakers**: Automatic provider isolation during failures with exponential backoff
+- **Health Monitoring**: Periodic health checks with consecutive failure tracking
+- **Configuration**: Support for comma-separated URLs or JSON with weights
+
+#### Enhanced Gas Strategy (`src/execution/gas_estimator.ts`)
+- **EIP-1559 Optimization**: Dynamic base fee multipliers with priority fee bounds
+- **Conservative Bounds**: Configurable min/max priority fees to prevent overpaying
+- **Backward Compatibility**: Maintains support for legacy `priorityFeeCapGwei` parameter
+- **Real-time Adjustment**: Uses latest block base fee with conservative multipliers
+
+#### Flashbots Integration (`src/execution/sim/`)
+- **Pre-send Simulation**: Bundle simulation before mainnet submission
+- **Profit Validation**: Automatic rejection of unprofitable or reverting transactions
+- **Timeout Handling**: Configurable simulation timeouts with fallback to mock simulation
+- **Error Reporting**: Detailed revert reasons and profit calculations
+
+#### Prometheus Metrics (`src/modules/metrics.ts`)
+- **Core Bot Metrics**: `bot_trades_executed_total`, `bot_trades_profitable_total`, `bot_rpc_failures_total`, `bot_backtest_runs_total`
+- **HTTP Endpoint**: `/metrics` endpoint serving Prometheus-compatible metrics
+- **System Monitoring**: Memory usage, uptime, and error tracking
+- **Custom Labels**: Pool addresses, fee tiers, and transaction types for detailed analysis
+
 #### Config Management (`src/config/`)
-- **Environment Validation**: Zod-based schema validation with fail-fast error reporting
-- **Multi-RPC Support**: Weighted RPC provider arrays with fallback orchestration
-- **Security**: PRIVATE_KEY validation only in live mode, safe defaults for dry runs
-
-#### Resilience & Reliability (`src/runtime/`)
-- **Exponential Backoff**: Jittered retry with configurable bounds (`src/runtime/retry/`)
-- **Connection Management**: Automatic Erigon→fallback failover (`src/runtime/connectivity/`)
-- **Health Monitoring**: HTTP endpoint with detailed system status
-
-#### Profit & Execution Control (`src/execution/`)
-- **Profit Guard**: Multi-threshold validation (USD/ETH) with detailed rejection reasons
-- **Gas Estimation**: EIP-1559 aware with priority fee caps and base fee multipliers
-- **Simulation Hooks**: Ready for Flashbots integration with mock stubs
-
-#### Observability (`src/health/`, `src/metrics/`)
-- **Health Endpoint**: `/health` returns JSON status, uptime, and activity metrics
-- **Metrics Interface**: Prometheus-ready hooks with pre-defined application metrics
-- **Structured Logging**: JSON output with module tags and log levels
+- **Environment Validation**: Enhanced Zod-based schema with new operational parameters
+- **Multi-RPC Configuration**: Support for `RPC_HTTP_LIST` in multiple formats
+- **Gas Strategy Settings**: `GAS_BASEFEE_BUMP`, `PRIORITY_FEE_GWEI_MIN/MAX` configuration
+- **Simulation Settings**: `FLASHBOTS_RPC_URL`, `SIM_TIMEOUT_MS`, `METRICS_PORT` support
 
 ## Quick Start
 
@@ -101,41 +125,77 @@ npm run backtest
 
 ### Configuration
 
-The bot now uses a centralized configuration system with validation:
+The bot uses a centralized configuration system with validation. Here are the key environment variables:
 
 ```bash
 # Copy configuration template
 cp .env.example .env
 
-# Required environment variables
+# Core configuration
 cat > .env << 'EOF'
-# Runtime mode
-DRY_RUN=true
-NETWORK=mainnet
+# ===== OPERATIONAL CONFIGURATION =====
+DRY_RUN=true                    # Set false for live trading
+NETWORK=mainnet                 # mainnet, goerli, sepolia
+PRIVATE_KEY=                    # Required for live mode only
 
-# RPC Configuration (choose one approach)
-PRIMARY_RPC_HTTP=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-FALLBACK_RPC_HTTP=https://rpc.ankr.com/eth
+# ===== MULTI-RPC CONFIGURATION =====
+
+# Option 1: Multi-RPC Failover (recommended)
+RPC_HTTP_LIST=https://eth-mainnet.g.alchemy.com/v2/KEY,https://rpc.ankr.com/eth
+
+# Option 2: Multi-RPC with weights (JSON format)
+# RPC_HTTP_LIST=[{"url":"https://rpc1.com","weight":2},{"url":"https://rpc2.com","weight":1}]
+
+# Option 3: Legacy single provider with fallback
+# PRIMARY_RPC_HTTP=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+# FALLBACK_RPC_HTTP=https://rpc.ankr.com/eth
+
+# WebSocket for real-time updates
 WS_RPC_URL=wss://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 
-# Alternative: JSON array of weighted providers
-# RPC_PROVIDERS='[{"url":"https://rpc1.com","weight":2},{"url":"https://rpc2.com","weight":1}]'
-
-# Optional: Erigon integration for enhanced mempool monitoring
+# Enhanced mempool monitoring (optional)
 ERIGON_RPC_HTTP=http://localhost:8545
 
-# Profit thresholds
-MIN_PROFIT_USD=25
-MIN_PROFIT_ETH=0.01
-MAX_PRIORITY_FEE_GWEI=50
+# ===== GAS STRATEGY (EIP-1559) =====
+GAS_BASEFEE_BUMP=2.0           # Base fee multiplier (e.g., 2x latest baseFee)
+PRIORITY_FEE_GWEI_MIN=1        # Minimum priority fee (gwei)
+PRIORITY_FEE_GWEI_MAX=3        # Maximum priority fee (gwei)
 
-# Observability
-LOG_LEVEL=info
-HEALTH_PORT=9090
+# ===== FLASHBOTS INTEGRATION =====
+FLASHBOTS_RPC_URL=https://relay.flashbots.net
+SIM_TIMEOUT_MS=3000            # Simulation timeout in milliseconds
 
-# Production only (leave empty in dry run)
-PRIVATE_KEY=
+# ===== METRICS & MONITORING =====
+METRICS_PORT=9090              # Prometheus metrics endpoint port
+HEALTH_PORT=9091               # Health check endpoint port
+LOG_LEVEL=info                 # debug, info, warn, error
+
+# ===== PROFIT THRESHOLDS =====
+MIN_PROFIT_USD=25              # Minimum profit in USD
+MIN_PROFIT_ETH=0.01            # Minimum profit in ETH
 EOF
+```
+
+#### Configuration Examples
+
+**Simple Multi-RPC Setup:**
+```bash
+RPC_HTTP_LIST=https://eth.llamarpc.com,https://rpc.ankr.com/eth,https://cloudflare-eth.com
+```
+
+**Weighted Multi-RPC Setup:**
+```bash
+RPC_HTTP_LIST='[
+  {"url":"https://premium-rpc.com","weight":3},
+  {"url":"https://backup-rpc.com","weight":1}
+]'
+```
+
+**Gas Strategy for High-Competition:**
+```bash
+GAS_BASEFEE_BUMP=3.0           # Aggressive 3x multiplier
+PRIORITY_FEE_GWEI_MIN=2        # Higher minimum
+PRIORITY_FEE_GWEI_MAX=10       # Allow higher fees
 ```
 
 ### Erigon Setup (Recommended)
@@ -154,11 +214,11 @@ erigon --chain=mainnet \
 
 ### Health & Monitoring
 
-The bot exposes a health endpoint for monitoring:
+The bot exposes health and status information via HTTP endpoints:
 
 ```bash
 # Check system status
-curl http://localhost:9090/health
+curl http://localhost:9091/health
 
 {
   "status": "ok",
@@ -182,6 +242,52 @@ curl http://localhost:9090/health
     "successRate": "14.7%"
   }
 }
+```
+
+### Prometheus Metrics
+
+The bot exposes comprehensive metrics for monitoring and alerting:
+
+```bash
+# Access metrics endpoint
+curl http://localhost:9090/metrics
+
+# Core bot metrics
+bot_trades_executed_total{pool_address="0x123...",fee_tier="3000",trade_type="jit"} 42
+bot_trades_profitable_total{pool_address="0x123...",fee_tier="3000"} 38
+bot_rpc_failures_total{provider_url="https://rpc1.com",error_type="timeout"} 3
+bot_backtest_runs_total{status="success"} 12
+
+# JIT strategy metrics
+jit_bot_jit_attempts_total 156
+jit_bot_jit_success_total 23
+jit_bot_jit_profit_usd{pool_address="0x123..."} 1250.75
+
+# System metrics
+jit_bot_uptime_seconds 3600
+jit_bot_memory_usage_bytes{type="heap_used"} 45234432
+jit_bot_active_pools_count 8
+```
+
+#### Grafana Dashboard
+
+Key metrics to monitor:
+
+- **Success Rate**: `bot_trades_profitable_total / bot_trades_executed_total`
+- **RPC Health**: `rate(bot_rpc_failures_total[5m])`
+- **Profit Tracking**: `rate(jit_bot_jit_profit_usd[1h])`
+- **System Health**: `jit_bot_uptime_seconds`, `jit_bot_memory_usage_bytes`
+
+Example Prometheus queries:
+```promql
+# Success rate over last hour
+(rate(bot_trades_profitable_total[1h]) / rate(bot_trades_executed_total[1h])) * 100
+
+# RPC failure rate
+rate(bot_rpc_failures_total[5m])
+
+# Average profit per successful trade
+rate(jit_bot_jit_profit_usd[1h]) / rate(bot_trades_profitable_total[1h])
 ```
 
 ### Runtime Modes

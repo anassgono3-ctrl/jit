@@ -182,4 +182,139 @@ Module-specific logging patterns:
 - Check existing issues and discussions
 - Review architecture documentation in `docs/`
 - Ask in team chat for quick questions
+
+---
+
+## Operational Excellence Guidelines
+
+### Multi-RPC Failover Development
+
+When working with RPC providers:
+
+1. **Always test failover scenarios**: Simulate network failures and RPC downtime
+2. **Use proper error classification**: Distinguish between timeout, rate limit, and connection errors
+3. **Implement circuit breakers**: Automatic provider isolation prevents cascading failures
+4. **Add appropriate metrics**: Track failure rates, response times, and provider health
+
+Example pattern:
+```typescript
+// Good: Proper error handling with metrics
+try {
+  const result = await provider.getBlockNumber();
+  metrics.recordRpcSuccess(providerUrl);
+  return result;
+} catch (error) {
+  metrics.recordRpcFailure(providerUrl, classifyError(error));
+  throw error;
+}
+```
+
+### Gas Strategy Implementation
+
+Follow these patterns for gas-related features:
+
+1. **Conservative by default**: Use safe multipliers and bounds to prevent overpaying
+2. **Configurable parameters**: All thresholds should be environment-configurable
+3. **EIP-1559 compliance**: Always implement priority fee bounds and base fee multipliers
+4. **Backward compatibility**: Maintain support for legacy gas configurations
+
+Example configuration validation:
+```typescript
+const gasConfig = z.object({
+  baseFeeMultiplier: z.number().min(1).max(10).default(2.0),
+  priorityFeeMinGwei: z.number().min(0).default(1),
+  priorityFeeMaxGwei: z.number().min(0.1).default(3),
+});
+```
+
+### Flashbots Integration Patterns
+
+When implementing simulation features:
+
+1. **Always have fallbacks**: Mock simulation when real API is unavailable
+2. **Proper timeout handling**: Configure reasonable timeouts with graceful degradation
+3. **Profit validation**: Validate profitable transactions before sending
+4. **Error classification**: Distinguish between revert, timeout, and API errors
+
+### Metrics and Observability
+
+Follow these practices for metrics:
+
+1. **Use descriptive labels**: Include pool addresses, fee tiers, error types
+2. **Counter naming**: Use `_total` suffix for monotonic counters
+3. **Histogram buckets**: Choose appropriate buckets for latency and profit metrics
+4. **Avoid high cardinality**: Don't use unbounded label values
+
+Required metrics for new features:
+- Success/failure counters
+- Latency histograms for async operations  
+- Error counters with error type classification
+- Business metrics (profit, volume, etc.)
+
+Example metrics implementation:
+```typescript
+export class NewFeatureMetrics {
+  private readonly operationCounter = new Counter({
+    name: 'jit_bot_new_feature_operations_total',
+    help: 'Total operations performed by new feature',
+    labelNames: ['operation_type', 'status'],
+  });
+
+  recordOperation(type: string, success: boolean): void {
+    this.operationCounter.inc({
+      operation_type: type,
+      status: success ? 'success' : 'failure',
+    });
+  }
+}
+```
+
+### Testing Requirements for New Features
+
+All operational excellence features must include:
+
+1. **Unit tests** for core logic
+2. **Integration tests** for external API interactions  
+3. **Failure scenario tests** for error handling
+4. **Configuration validation tests**
+5. **Metrics collection tests**
+
+Minimum test coverage expectations:
+- **90%+ for critical paths** (gas estimation, RPC calls, profit calculations)
+- **80%+ for business logic** (strategy, simulation, metrics)
+- **70%+ overall** for non-critical utilities
+
+### Configuration Management
+
+Follow these patterns for new environment variables:
+
+1. **Use Zod schemas** for validation with meaningful error messages
+2. **Provide sensible defaults** for optional parameters
+3. **Group related settings** logically in documentation
+4. **Validate relationships** between dependent parameters
+
+Example:
+```typescript
+const flashbotsConfig = z.object({
+  FLASHBOTS_RPC_URL: z.string().url().optional(),
+  SIM_TIMEOUT_MS: z.coerce.number().int().min(100).max(30000).default(3000),
+}).refine(data => {
+  // If Flashbots URL is provided, timeout must be reasonable
+  if (data.FLASHBOTS_RPC_URL && data.SIM_TIMEOUT_MS < 1000) {
+    throw new Error('SIM_TIMEOUT_MS must be at least 1000ms when using Flashbots');
+  }
+  return true;
+});
+```
+
+### Code Review Checklist for Operational Features
+
+- [ ] Proper error handling with graceful degradation
+- [ ] Metrics instrumentation with appropriate labels
+- [ ] Configuration validation with Zod schemas
+- [ ] Comprehensive test coverage including failure scenarios
+- [ ] Documentation updates for new environment variables
+- [ ] Backward compatibility maintained
+- [ ] Resource cleanup (timers, connections, etc.)
+- [ ] Logging with structured context
 - Open an issue for feature requests or bugs
