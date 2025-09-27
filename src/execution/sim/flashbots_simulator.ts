@@ -8,10 +8,16 @@ export interface SimulationResult {
 }
 
 export interface SimulationOptions {
+  // Existing fields in repo
   blockNumber?: number;
   timestamp?: number;
   baseFee?: bigint;
   validateProfit?: boolean;
+
+  // New fields for test compatibility and future integration
+  timeoutMs?: number;        // per-test option with env fallback
+  flashbotsUrl?: string;     // tests may pass this
+  relayUrl?: string;         // alternative caller option
 }
 
 /**
@@ -19,31 +25,40 @@ export interface SimulationOptions {
  * This provides the interface for future integration with Flashbots simulate API
  */
 export async function simulateBundle(
-  rawTxs: string[], 
+  rawTxs: string[],
   options: SimulationOptions = {}
 ): Promise<SimulationResult> {
-  // Stub implementation - integrate real Flashbots simulation later
-  
-  // Basic validation
+  // Input validation
   if (!rawTxs || rawTxs.length === 0) {
-    return {
-      success: false,
-      error: 'No transactions provided'
-    };
+    return { success: false, error: 'No transactions provided' };
   }
 
-  // Mock simulation result for now
-  // In real implementation, this would:
-  // 1. Submit bundle to Flashbots simulate endpoint
-  // 2. Parse simulation results
-  // 3. Calculate profit/loss from state changes
-  // 4. Return detailed simulation outcome
-  
+  // Normalize timeout (prefer option, fall back to env, default 5000ms)
+  const timeoutFromEnv = Number(process.env.SIM_TIMEOUT_MS);
+  const defaultTimeout = Number.isFinite(timeoutFromEnv) ? timeoutFromEnv : 5000;
+  const timeoutMs =
+    typeof options.timeoutMs === 'number' ? options.timeoutMs : defaultTimeout;
+
+  // Normalize relay URL (prefer flashbotsUrl, then relayUrl, then env)
+  const relay =
+    options.flashbotsUrl ??
+    options.relayUrl ??
+    (process.env.FLASHBOTS_RPC_URL ? String(process.env.FLASHBOTS_RPC_URL) : undefined);
+
+  // NOTE: This is still a stub. Future real implementation should:
+  // 1) POST bundle to relay simulate endpoint (relay || FLASHBOTS_RPC_URL)
+  // 2) Respect timeoutMs in the request
+  // 3) Parse result into SimulationResult
+
+  void timeoutMs; // suppress unused in stub
+  void relay;
+
+  // Mock simulation result
   return {
     success: true,
     profitUsd: 0,
     profitEth: 0,
-    gasUsed: 200000 // Mock gas usage
+    gasUsed: 200000,
   };
 }
 
@@ -57,27 +72,17 @@ export async function wouldBeProfitable(
 ): Promise<{ profitable: boolean; reason?: string; result?: SimulationResult }> {
   try {
     const result = await simulateBundle(rawTxs, { ...options, validateProfit: true });
-    
     if (!result.success) {
-      return {
-        profitable: false,
-        reason: result.error || 'Simulation failed',
-        result
-      };
+      return { profitable: false, reason: result.error || 'Simulation failed', result };
     }
-
     const profitable = (result.profitUsd ?? 0) >= minProfitUsd;
-    
     return {
       profitable,
       reason: profitable ? undefined : `Simulated profit $${result.profitUsd} < min $${minProfitUsd}`,
-      result
+      result,
     };
   } catch (error) {
-    return {
-      profitable: false,
-      reason: `Simulation error: ${error}`,
-    };
+    return { profitable: false, reason: `Simulation error: ${error}` };
   }
 }
 
