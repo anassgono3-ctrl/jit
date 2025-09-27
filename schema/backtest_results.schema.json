@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Backtest Results Schema",
+  "type": "object",
+  "required": [
+    "results",
+    "successRate",
+    "medianProfitUsd",
+    "worstProfitUsd",
+    "totalPlans",
+    "acceptedPlans",
+    "rejectionStats",
+    "summary",
+    "distribution",
+    "timestamp"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "successRate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "medianProfitUsd": {
+      "type": "number"
+    },
+    "worstProfitUsd": {
+      "type": "number"
+    },
+    "totalPlans": {
+      "type": "number",
+      "minimum": 0
+    },
+    "acceptedPlans": {
+      "type": "number",
+      "minimum": 0
+    },
+    "rejectionStats": {
+      "type": "object",
+      "required": [
+        "profitBelowThreshold",
+        "minSwapUsdNotMet",
+        "liquidityNotViable",
+        "gasTooHigh",
+        "inclusionProbTooLow"
+      ],
+      "properties": {
+        "profitBelowThreshold": { "type": "number", "minimum": 0 },
+        "minSwapUsdNotMet": { "type": "number", "minimum": 0 },
+        "liquidityNotViable": { "type": "number", "minimum": 0 },
+        "gasTooHigh": { "type": "number", "minimum": 0 },
+        "inclusionProbTooLow": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object", 
+      "required": [
+        "totalFixtures",
+        "successfulPlans",
+        "profitableExecutions",
+        "totalProfitUsd",
+        "averageProfitUsd",
+        "successRate",
+        "averageExecutionTimeMs"
+      ],
+      "properties": {
+        "totalFixtures": { "type": "number", "minimum": 0 },
+        "successfulPlans": { "type": "number", "minimum": 0 },
+        "profitableExecutions": { "type": "number", "minimum": 0 },
+        "totalProfitUsd": { "type": "string" },
+        "averageProfitUsd": { "type": "string" },
+        "successRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "averageExecutionTimeMs": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "distribution": {
+      "type": "object",
+      "required": ["profitBuckets", "executionTimeBuckets"],
+      "properties": {
+        "profitBuckets": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "executionTimeBuckets": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "timestamp": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}
