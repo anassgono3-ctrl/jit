@@ -248,6 +248,7 @@ export function getConfigSummary() {
     network: c.NETWORK,
     hasPrivateKey: !!c.PRIVATE_KEY,
     rpcProviders: (c.RPC_PROVIDERS || []).length,
+    rpcHttpList: (c.RPC_HTTP_LIST || []).length,
     hasPrimaryRpc: !!c.PRIMARY_RPC_HTTP,
     hasFallbackRpc: !!c.FALLBACK_RPC_HTTP,
     hasErigonRpc: !!c.ERIGON_RPC_HTTP,
