@@ -18,23 +18,22 @@ import { log } from './modules/logger';
     const config = loadConfig();
     
     if (config.DRY_RUN) {
-      log.info('[STARTUP] DRY_RUN=true (simulation mode). Skipping PRIVATE_KEY validation.');
+      log.info('[STARTUP] DRY_RUN=true (simulation mode). Skipping PRIVATE_KEY validation.', { dryRun: true });
       return;
     }
 
     if (!config.PRIVATE_KEY) {
-      log.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.');
+      log.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.', { dryRun: false });
       log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
       process.exit(1);
     }
 
     if (!/^0x[0-9a-fA-F]{64}$/.test(config.PRIVATE_KEY)) {
-      log.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY is malformed (expected 0x + 64 hex chars).');
-      log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
+      log.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY invalid format (must be 0x + 64 hex).', { dryRun: false });
       process.exit(1);
     }
 
-    log.info('[STARTUP] Live-mode key validated; proceeding...');
+    log.info('[STARTUP] Live-mode key validated; proceeding...', { dryRun: false });
   } catch (error) {
     log.error('[STARTUP] Config validation failed:', error instanceof Error ? error : new Error(String(error)));
     log.error('[STARTUP] Exiting to prevent accidental live-mode execution.');
