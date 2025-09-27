@@ -23,6 +23,8 @@ describe('Config Loader', () => {
     expect(cfg.MIN_PROFIT_USD).to.equal(25); // Updated default
     expect(cfg.CAPTURE_FRACTION).to.equal(0.7);
     expect(cfg.INCLUSION_PROBABILITY).to.equal(0.35);
+    expect(cfg.PRIORITY_FEE_GWEI_MAX).to.equal(50); // Updated gas strategy default
+    expect(cfg.SIM_TIMEOUT_MS).to.equal(5000); // Updated simulation timeout default
     expect(cfg.LOG_LEVEL).to.equal('info');
   });
 
@@ -116,6 +118,8 @@ describe('Config Loader', () => {
       captureFraction: 0.8,
       inclusionProbability: 0.4
     });
+    // Check that rpcHttpList is present and non-empty
+    expect(summary.rpcHttpList).to.be.greaterThan(0);
   });
 
   it('caches config after first load', () => {

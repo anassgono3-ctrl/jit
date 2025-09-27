@@ -23,5 +23,7 @@ describe('Config summary', () => {
     expect(s).to.have.property('network');
     expect(s).to.have.property('dryRun');
     expect(s).to.have.property('rpcProviders');
+    expect(s).to.have.property('rpcHttpList');
+    expect(s.rpcHttpList).to.be.greaterThan(0); // Should have at least one RPC endpoint
   });
 });
