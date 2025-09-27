@@ -29,7 +29,7 @@ describe('BacktestRunner', () => {
   after(async () => {
     // Clean up temporary directory
     try {
-      await fs.rmdir(tempDir, { recursive: true });
+      await fs.rm(tempDir, { recursive: true });
     } catch (error) {
       // Ignore cleanup errors
     }
