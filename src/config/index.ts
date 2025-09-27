@@ -168,7 +168,7 @@ export function loadConfig(): Config {
 
     GAS_BASEFEE_BUMP: parseNumber(process.env.GAS_BASEFEE_BUMP, 2.0),
     PRIORITY_FEE_GWEI_MIN: parseNumber(process.env.PRIORITY_FEE_GWEI_MIN, parseNumber(process.env.MIN_PRIORITY_FEE_GWEI, 1)),
-    PRIORITY_FEE_GWEI_MAX: parseNumber(process.env.PRIORITY_FEE_GWEI_MAX, parseNumber(process.env.MAX_PRIORITY_FEE_GWEI, 3)),
+    PRIORITY_FEE_GWEI_MAX: parseNumber(process.env.PRIORITY_FEE_GWEI_MAX, parseNumber(process.env.MAX_PRIORITY_FEE_GWEI, 50)),
     MAX_PRIORITY_FEE_GWEI: process.env.MAX_PRIORITY_FEE_GWEI ? parseNumber(process.env.MAX_PRIORITY_FEE_GWEI, 0) : undefined,
 
     FLASHBOTS_RPC_URL: process.env.FLASHBOTS_RPC_URL,
