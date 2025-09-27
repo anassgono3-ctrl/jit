@@ -59,6 +59,12 @@ class Metrics {
   public readonly memoryUsage: Gauge<string>;
   public readonly activeBotInstances: Gauge<string>;
 
+  // Bot-level Counters expected by tests
+  public readonly botTradesExecutedTotal: Counter<string>;
+  public readonly botTradesProfitableTotal: Counter<string>;
+  public readonly botRpcFailuresTotal: Counter<string>;
+  public readonly botBacktestRunsTotal: Counter<string>;
+
   constructor(config: Partial<MetricsConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
@@ -197,6 +203,31 @@ class Metrics {
       help: 'Number of active bot instances',
     });
 
+    // Bot-level Counters (test compatibility)
+    this.botTradesExecutedTotal = new Counter({
+      name: `${this.config.prefix}bot_trades_executed_total`,
+      help: 'Total number of trades the bot attempted/executed',
+      labelNames: ['strategy'],
+    });
+
+    this.botTradesProfitableTotal = new Counter({
+      name: `${this.config.prefix}bot_trades_profitable_total`,
+      help: 'Total number of trades with positive profit',
+      labelNames: ['strategy'],
+    });
+
+    this.botRpcFailuresTotal = new Counter({
+      name: `${this.config.prefix}bot_rpc_failures_total`,
+      help: 'Total number of RPC failures encountered',
+      labelNames: ['endpoint', 'reason'],
+    });
+
+    this.botBacktestRunsTotal = new Counter({
+      name: `${this.config.prefix}bot_backtest_runs_total`,
+      help: 'Total number of backtest runs',
+      labelNames: ['status'],
+    });
+
     // Start collecting default metrics if enabled
     if (this.config.collectDefault) {
       this.startDefaultMetricsCollection();
@@ -223,10 +254,13 @@ class Metrics {
       fee_tier: feeTier.toString(),
     });
 
-    this.jitProfitUsd.observe({
-      pool_address: poolAddress,
-      fee_tier: feeTier.toString(),
-    }, profitUsd);
+    this.jitProfitUsd.observe(
+      {
+        pool_address: poolAddress,
+        fee_tier: feeTier.toString(),
+      },
+      profitUsd
+    );
   }
 
   /**
@@ -274,7 +308,7 @@ class Metrics {
    */
   recordTransaction(type: string, status: 'pending' | 'confirmed' | 'failed', gasPriceGwei?: number): void {
     this.transactionsTotal.inc({ type, status });
-    
+
     if (gasPriceGwei) {
       this.transactionGasPrice.observe({ transaction_type: type }, gasPriceGwei);
     }
@@ -358,6 +392,49 @@ class Metrics {
       this.defaultMetricsTimer = undefined;
     }
   }
+
+  // ---------------------------
+  // Bot-level API (Test Compat)
+  // ---------------------------
+
+  /**
+   * Record a trade execution attempt (bot-level)
+   */
+  recordTradeExecuted(txHash: string, notionalUsd: number, strategy: string): void {
+    // Labels avoid high-cardinality values like txHash; include only strategy.
+    this.botTradesExecutedTotal.inc({ strategy });
+    // Optionally, reflect into generic transactions metric:
+    this.transactionsTotal.inc({ type: strategy || 'trade', status: 'executed' });
+    // Note: notionalUsd is currently unused in counters; can be routed to a histogram if needed.
+    void txHash;
+    void notionalUsd;
+  }
+
+  /**
+   * Record a profitable trade (bot-level)
+   */
+  recordProfitableTrade(txHash: string, profitUsd: number, strategy: string = 'jit'): void {
+    this.botTradesProfitableTotal.inc({ strategy });
+    // Also mirror profit in JIT histogram if appropriate:
+    if (strategy === 'jit') {
+      this.jitProfitUsd.observe({ pool_address: 'n/a', fee_tier: 'n/a' }, profitUsd);
+    }
+    void txHash;
+  }
+
+  /**
+   * Record an RPC failure (bot-level)
+   */
+  recordRpcFailure(endpoint: string, reason: string): void {
+    this.botRpcFailuresTotal.inc({ endpoint, reason });
+  }
+
+  /**
+   * Record a backtest run (bot-level)
+   */
+  recordBacktestRun(status: 'success' | 'failure'): void {
+    this.botBacktestRunsTotal.inc({ status });
+  }
 }
 
 /**
@@ -377,11 +454,11 @@ export function createMetrics(config: Partial<MetricsConfig> = {}): Metrics {
  */
 export function createMetricsServer(port: number = 9090): void {
   const http = require('http');
-  
+
   const server = http.createServer(async (req: unknown, res: unknown) => {
     // Type assertions for basic HTTP server
     const request = req as { url?: string; method?: string };
-    const response = res as { 
+    const response = res as {
       writeHead: (code: number, headers?: Record<string, string>) => void;
       end: (data?: string) => void;
     };
@@ -403,4 +480,3 @@ export function createMetricsServer(port: number = 9090): void {
     console.log(`Metrics server listening on port ${port}`);
   });
 }
-
