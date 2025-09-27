@@ -130,8 +130,8 @@ export function loadConfig(): Config {
   // best-effort dotenv load early
   if (!process.env.NODE_ENV && fs.existsSync('.env')) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('dotenv').config();
+      // Dynamic import to avoid circular dependencies
+      require('dotenv').config(); // eslint-disable-line
     } catch {
       /* ignore */
     }
@@ -180,18 +180,19 @@ export function loadConfig(): Config {
     PRIVATE_KEY: process.env.PRIVATE_KEY,
   };
 
-  let normalized = normalizeRpcList(cfgPartial.RPC_HTTP_LIST_RAW);
+  const normalized = normalizeRpcList(cfgPartial.RPC_HTTP_LIST_RAW);
+  const endpoints: RpcEndpoint[] = [...normalized];
 
   // Add PRIMARY_RPC_HTTP to the list if available
-  if (cfgPartial.PRIMARY_RPC_HTTP && normalized.length === 0) {
-    normalized.push({ url: cfgPartial.PRIMARY_RPC_HTTP, weight: 1 });
+  if (cfgPartial.PRIMARY_RPC_HTTP && endpoints.length === 0) {
+    endpoints.push({ url: cfgPartial.PRIMARY_RPC_HTTP, weight: 1 });
   }
 
   // fallback: if list empty and FALLBACK_RPC_HTTP provided, use it
-  if (normalized.length === 0) {
+  if (endpoints.length === 0) {
     const fallbackRaw = (cfgPartial.FALLBACK_RPC_HTTP || '').trim();
     if (fallbackRaw) {
-      normalized.push({ url: fallbackRaw, weight: 1 });
+      endpoints.push({ url: fallbackRaw, weight: 1 });
     }
   }
 
@@ -206,15 +207,15 @@ export function loadConfig(): Config {
   }
 
   // Require at least one RPC provider (but allow tests to test this validation)
-  if (!cfgPartial.PRIMARY_RPC_HTTP && normalized.length === 0) {
+  if (!cfgPartial.PRIMARY_RPC_HTTP && endpoints.length === 0) {
     throw new Error('At least one RPC provider required (PRIMARY_RPC_HTTP or RPC_PROVIDERS)');
   }
 
   const cfg: Config = {
     ...(cfgPartial as any),
-    RPC_HTTP_LIST: normalized,
+    RPC_HTTP_LIST: endpoints,
     // For compatibility, also set RPC_PROVIDERS
-    RPC_PROVIDERS: normalized.length > 0 ? normalized : undefined,
+    RPC_PROVIDERS: endpoints.length > 0 ? endpoints : undefined,
   };
 
   cached = cfg;
@@ -229,11 +230,13 @@ function getConfig(): Config {
   return _loadedConfig;
 }
 
+/* eslint-disable no-undef */
 export const config = new Proxy({} as Config, {
   get(target, prop) {
     return getConfig()[prop as keyof Config];
   }
 });
+/* eslint-enable no-undef */
 
 export default config;
 
