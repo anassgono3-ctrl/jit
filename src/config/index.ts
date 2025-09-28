@@ -295,6 +295,7 @@ export function getConfigSummary() {
     GAS_BASEFEE_BUMP: c.GAS_BASEFEE_BUMP,
     // legacy alias some tests expect
     gasBaseFeeMultiplier: c.GAS_BASEFEE_BUMP,
+    priorityFeeMinGwei: c.PRIORITY_FEE_GWEI_MIN,
     
     // Test compatibility fields (camelCase)
     dryRun: c.DRY_RUN,

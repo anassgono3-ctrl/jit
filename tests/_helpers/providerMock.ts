@@ -1,38 +1,30 @@
-// tests/_helpers/providerMock.ts
-// Stubs ethers' JsonRpcProvider._detectNetwork() to avoid real-network checks during tests.
+// If this helper already exists, keep it. If not, add this version that safely stubs either
+// _detectNetwork (repo's current usage) or detectNetwork (future-proof).
 
 import { JsonRpcProvider } from 'ethers';
 
-let originalDetectNetwork: Function | undefined;
+let restoreFn: (() => void) | undefined;
 
 export function stubJsonRpcProviderDetectNetwork() {
-  const proto = (JsonRpcProvider as any).prototype;
-  if (!proto || typeof proto._detectNetwork !== 'function') {
-    // Nothing to stub; return a no-op restore.
-    return () => {};
-  }
-  
-  // Store original method
-  originalDetectNetwork = proto._detectNetwork;
-  
-  // Replace with stub
-  proto._detectNetwork = async function () {
-    // Return a harmless "mainnet" shape; consumers usually just check existence.
+  const proto: any = (JsonRpcProvider as any).prototype;
+  const methodName = typeof proto._detectNetwork === 'function' ? '_detectNetwork'
+                   : typeof proto.detectNetwork === 'function' ? 'detectNetwork'
+                   : undefined;
+
+  if (!methodName) return () => {};
+
+  const original = proto[methodName];
+  proto[methodName] = async function () {
     return { chainId: 1, name: 'homestead' };
   };
-  
-  return () => {
-    if (originalDetectNetwork) {
-      proto._detectNetwork = originalDetectNetwork;
-      originalDetectNetwork = undefined;
-    }
+
+  restoreFn = () => {
+    proto[methodName] = original;
+    restoreFn = undefined;
   };
+  return restoreFn;
 }
 
 export function restoreJsonRpcProviderDetectNetwork() {
-  if (originalDetectNetwork) {
-    const proto = (JsonRpcProvider as any).prototype;
-    proto._detectNetwork = originalDetectNetwork;
-    originalDetectNetwork = undefined;
-  }
+  if (restoreFn) restoreFn();
 }

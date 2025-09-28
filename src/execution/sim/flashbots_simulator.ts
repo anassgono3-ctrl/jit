@@ -21,7 +21,7 @@ export interface SimulationOptions {
 }
 
 // Export a single constant used by tests
-export const DEFAULT_MOCK_PROFIT_USD = 0;
+export const DEFAULT_MOCK_PROFIT_USD = 50;
 
 /**
  * Stub implementation for Flashbots simulation
