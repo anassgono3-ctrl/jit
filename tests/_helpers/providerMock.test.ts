@@ -35,7 +35,7 @@ describe('Test Helpers', () => {
   describe('Flashbots Simulator Constants', () => {
     it('should export DEFAULT_MOCK_PROFIT_USD constant', () => {
       expect(DEFAULT_MOCK_PROFIT_USD).to.be.a('number');
-      expect(DEFAULT_MOCK_PROFIT_USD).to.equal(0);
+      expect(DEFAULT_MOCK_PROFIT_USD).to.equal(50);
     });
 
     it('should use the constant in simulation results', async () => {
