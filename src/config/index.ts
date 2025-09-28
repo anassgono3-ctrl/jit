@@ -46,6 +46,11 @@ export interface Config {
 
   PRIVATE_KEY?: string | undefined;
 
+  // NEW (safe additions)
+  ENABLE_MEMPOOL: boolean;
+  MAX_DAILY_GAS_USD?: number;
+  TRADE_CAP?: number;
+
   // Maintain compatibility with existing tests
   LOG_LEVEL: string;
   RPC_PROVIDERS?: RpcEndpoint[] | undefined;
@@ -131,7 +136,7 @@ export function loadConfig(): Config {
                  process.argv.some(arg => arg.includes('mocha'));
   if (!isTest && fs.existsSync('.env')) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('dotenv').config({ override: false });
     } catch {
       /* ignore */
@@ -255,6 +260,12 @@ export function loadConfig(): Config {
     SIM_TIMEOUT_MS,
     METRICS_PORT,
     PRIVATE_KEY,
+    
+    // NEW (safe additions)
+    ENABLE_MEMPOOL: parseBool(process.env.ENABLE_MEMPOOL, false),
+    MAX_DAILY_GAS_USD: process.env.MAX_DAILY_GAS_USD ? parseNumber(process.env.MAX_DAILY_GAS_USD, 0) : 0,
+    TRADE_CAP: process.env.TRADE_CAP ? parseNumber(process.env.TRADE_CAP, 0) : 0,
+    
     LOG_LEVEL,
     RPC_PROVIDERS: endpoints.length > 0 ? endpoints : undefined,
     PRIMARY_RPC_HTTP,
@@ -293,6 +304,7 @@ export function getConfigSummary() {
     METRICS_PORT: c.METRICS_PORT,
     FLASHBOTS_RPC_URL_SET: !!c.FLASHBOTS_RPC_URL,
     GAS_BASEFEE_BUMP: c.GAS_BASEFEE_BUMP,
+    ENABLE_MEMPOOL: c.ENABLE_MEMPOOL,
     // legacy alias some tests expect
     gasBaseFeeMultiplier: c.GAS_BASEFEE_BUMP,
     priorityFeeMinGwei: c.PRIORITY_FEE_GWEI_MIN,

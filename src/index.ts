@@ -1,15 +1,7 @@
-// src/index.ts
-// Add test-only early-exit and a plain log line for legacy tests.
-
 import 'dotenv/config';
 import logger from './modules/logger';
 import { loadConfig, getConfigSummary } from './config';
 
-/**
- * Live-mode safety guard
- * - Runs before any provider initialization
- * - Exits if DRY_RUN=false and PRIVATE_KEY is missing/invalid
- */
 function validateLiveMode() {
   const cfg = loadConfig();
   if (!cfg.DRY_RUN) {
@@ -27,33 +19,33 @@ function validateLiveMode() {
   }
 }
 
-/**
- * Main entrypoint
- * - testMode: when true, short-circuits long-lived/provider-heavy initialization
- *             while still performing configuration and guard checks.
- *   This is for tests only; production behavior is unchanged.
- */
 export async function main(opts: { testMode?: boolean } = {}) {
-  // Always run guard first (no provider initialization yet)
   validateLiveMode();
 
+  const cfg = loadConfig();
   const cfgSummary = getConfigSummary?.() ?? {};
   logger.info('[STARTUP] JIT Liquidity Bot starting...');
   logger.info('[STARTUP] Resolved config summary', cfgSummary);
 
-  // In tests, avoid starting providers, HTTP servers, mempool listeners, etc.
   if (opts.testMode) {
     logger.info('[STARTUP] testMode=true — initializing minimal startup for tests.');
     logger.info('[STARTUP] Test-mode startup complete');
     return;
   }
 
-  // --- Normal startup path below ---
-  // Initialize runtime: providers, metrics, strategy, mempool, execution runtime, etc.
-  // NOTE: ensure provider construction is lazy and only happens here (not at import time).
+  // Enable mempool only when explicitly configured, and only in live mode
+  if (cfg.ENABLE_MEMPOOL && !cfg.DRY_RUN) {
+    // dynamic import to avoid side effects during tests
+    const { MempoolOrchestrator } = await import('./runtime/mempool/orchestrator');
+    const orchestrator = new MempoolOrchestrator();
+    await orchestrator.start();
+    logger.info('[STARTUP] Mempool orchestrator started');
+  } else {
+    logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false or DRY_RUN=true)');
+  }
+
   logger.info('[STARTUP] Bot started successfully');
 
-  // Keep process alive and graceful shutdown
   process.on('SIGINT', () => {
     logger.info('[SHUTDOWN] Received SIGINT, shutting down gracefully...');
     process.exit(0);
