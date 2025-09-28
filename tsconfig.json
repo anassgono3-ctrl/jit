@@ -30,7 +30,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "tests/_helpers/**/*"
   ],
   "ts-node": {
     "esm": true,

@@ -20,6 +20,9 @@ export interface SimulationOptions {
   relayUrl?: string;         // alternative caller option
 }
 
+// Export the default mock profit so tests can import a single source of truth.
+export const DEFAULT_MOCK_PROFIT_USD = 0;
+
 /**
  * Stub implementation for Flashbots simulation
  * This provides the interface for future integration with Flashbots simulate API
@@ -56,7 +59,7 @@ export async function simulateBundle(
   // Mock simulation result with realistic positive profit for strategy acceptance
   return {
     success: true,
-    profitUsd: 35, // Realistic positive profit above typical min thresholds (25 USD)
+    profitUsd: DEFAULT_MOCK_PROFIT_USD,
     profitEth: 0.015, // Equivalent at ~$2000/ETH
     gasUsed: 200000,
   };
