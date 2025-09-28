@@ -1,16 +1,33 @@
 import { expect } from 'chai';
 import { evaluatePlan } from '../../src/strategy/profitability';
 import { SimulationResult, ProfitabilityConfig } from '../../src/strategy/types';
+import { loadConfig, resetConfig } from '../../src/config';
 
 describe('Profitability Strategy', () => {
-  const defaultConfig: ProfitabilityConfig = {
-    minProfitUsd: 25,
-    captureFraction: 0.7,
-    inclusionProbability: 0.35
-  };
+  let defaultConfig: ProfitabilityConfig;
+
+  before(() => {
+    resetConfig();
+    // Set minimal RPC config to load defaults
+    process.env.DRY_RUN = 'true';
+    process.env.PRIMARY_RPC_HTTP = 'http://localhost:8545';
+    
+    const cfg = loadConfig();
+    defaultConfig = {
+      minProfitUsd: cfg.MIN_PROFIT_USD,
+      captureFraction: cfg.CAPTURE_FRACTION,
+      inclusionProbability: cfg.INCLUSION_PROBABILITY
+    };
+  });
+
+  after(() => {
+    resetConfig();
+    delete process.env.DRY_RUN;
+    delete process.env.PRIMARY_RPC_HTTP;
+  });
 
   it('accepts profitable plan above threshold', () => {
-    // Use a plan that will be above the 25 USD threshold
+    // Use a plan that will be above the configured threshold
     const sim: SimulationResult = {
       feesToken0Usd: 100,
       feesToken1Usd: 100,
@@ -22,8 +39,8 @@ describe('Profitability Strategy', () => {
     
     expect(decision.accept).to.be.true;
     expect(decision.reason).to.be.undefined;
-    // Expected: (200 - 10) * 0.7 * 0.35 - 15 = 190 * 0.245 - 15 = 46.55 - 15 = 31.55 (above 25)
-    expect(decision.expectedNetUsd).to.be.greaterThan(25);
+    // Expected profit should be above the configured minimum
+    expect(decision.expectedNetUsd).to.be.greaterThan(defaultConfig.minProfitUsd);
   });
 
   it('rejects plan with negative gross profit', () => {
@@ -53,8 +70,8 @@ describe('Profitability Strategy', () => {
     
     expect(decision.accept).to.be.false;
     expect(decision.reason).to.equal('expectedNetUsdBelowThreshold');
-    // Expected: (50 - 5) * 0.7 * 0.35 - 20 = 45 * 0.245 - 20 = 11.025 - 20 = -8.975 (below 25)
-    expect(decision.expectedNetUsd).to.be.lessThan(25);
+    // Expected profit should be below the configured minimum
+    expect(decision.expectedNetUsd).to.be.lessThan(defaultConfig.minProfitUsd);
   });
 
   it('calculates score correctly', () => {
