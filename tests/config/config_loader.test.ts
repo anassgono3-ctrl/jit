@@ -86,6 +86,11 @@ describe('Config Loader', () => {
 
   it('requires at least one RPC provider', () => {
     process.env.DRY_RUN = 'true';
+    // Explicitly delete RPC variables to test "no RPC configured" scenario
+    delete process.env.RPC_HTTP_LIST;
+    delete process.env.RPC_HTTP_URLS;
+    delete process.env.RPCS;
+    delete process.env.RPC_PROVIDERS;
     expect(() => loadConfig()).to.throw(/At least one RPC provider required/);
   });
 
@@ -99,6 +104,10 @@ describe('Config Loader', () => {
   it('rejects invalid RPC_PROVIDERS JSON', () => {
     process.env.DRY_RUN = 'true';
     process.env.RPC_PROVIDERS = 'invalid json';
+    // Clear other RPC sources so invalid RPC_PROVIDERS is the only option
+    delete process.env.RPC_HTTP_LIST;
+    delete process.env.RPC_HTTP_URLS;
+    delete process.env.RPCS;
     expect(() => loadConfig()).to.throw(/Invalid RPC_PROVIDERS JSON/);
   });
 

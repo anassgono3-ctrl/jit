@@ -20,7 +20,7 @@ export interface SimulationOptions {
   relayUrl?: string;         // alternative caller option
 }
 
-// Export the default mock profit so tests can import a single source of truth.
+// Export a single constant used by tests
 export const DEFAULT_MOCK_PROFIT_USD = 0;
 
 /**
