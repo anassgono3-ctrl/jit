@@ -3,11 +3,17 @@
 
 import 'dotenv/config';
 import logger from './modules/logger';
-import { loadConfig } from './config';
+import { loadConfig, getConfigSummary } from './config';
 
-// Live-mode guard (simplified; your repo may already have this)
-function validateLiveMode(cfg: ReturnType<typeof loadConfig>) {
+/**
+ * Live-mode safety guard
+ * - Runs before any provider initialization
+ * - Exits if DRY_RUN=false and PRIVATE_KEY is missing/invalid
+ */
+function validateLiveMode() {
+  const cfg = loadConfig();
   if (!cfg.DRY_RUN) {
+    logger.info('[STARTUP] DRY_RUN=false (live)');
     if (!cfg.PRIVATE_KEY) {
       logger.error('[STARTUP] DRY_RUN=false but no PRIVATE_KEY provided.');
       process.exit(1);
@@ -16,42 +22,51 @@ function validateLiveMode(cfg: ReturnType<typeof loadConfig>) {
       logger.error('[STARTUP] DRY_RUN=false but PRIVATE_KEY invalid format (must be 0x + 64 hex).');
       process.exit(1);
     }
-  }
-}
-
-export async function main() {
-  const cfg = loadConfig();
-
-  // Explicit string for tests that match this legacy line
-  if (!cfg.DRY_RUN) {
-    logger.info('[STARTUP] DRY_RUN=false (live)');
   } else {
     logger.info('[STARTUP] DRY_RUN=true (simulation mode).');
   }
+}
 
-  validateLiveMode(cfg);
+/**
+ * Main entrypoint
+ * - testMode: when true, short-circuits long-lived/provider-heavy initialization
+ *             while still performing configuration and guard checks.
+ *   This is for tests only; production behavior is unchanged.
+ */
+export async function main(opts: { testMode?: boolean } = {}) {
+  // Always run guard first (no provider initialization yet)
+  validateLiveMode();
 
-  // Test-only: allow a clean exit before providers start (child-process tests)
-  if (process.env.TEST_NO_PROVIDER_START === 'true') {
-    // eslint-disable-next-line no-console
-    console.log('OK');
+  const cfgSummary = getConfigSummary?.() ?? {};
+  logger.info('[STARTUP] JIT Liquidity Bot starting...');
+  logger.info('[STARTUP] Resolved config summary', cfgSummary);
+
+  // In tests, avoid starting providers, HTTP servers, mempool listeners, etc.
+  if (opts.testMode) {
+    logger.info('[STARTUP] testMode=true — initializing minimal startup for tests.');
+    logger.info('[STARTUP] Test-mode startup complete');
     return;
   }
 
-  // ... normal startup (providers, monitors, etc.) ...
-  // This placeholder demonstrates where you'd continue initialization.
-  logger.info({ cfg: { network: cfg.NETWORK, dryRun: cfg.DRY_RUN } }, 'Bot started successfully');
+  // --- Normal startup path below ---
+  // Initialize runtime: providers, metrics, strategy, mempool, execution runtime, etc.
+  // NOTE: ensure provider construction is lazy and only happens here (not at import time).
+  logger.info('[STARTUP] Bot started successfully');
+
+  // Keep process alive and graceful shutdown
+  process.on('SIGINT', () => {
+    logger.info('[SHUTDOWN] Received SIGINT, shutting down gracefully...');
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    logger.info('[SHUTDOWN] Received SIGTERM, shutting down gracefully...');
+    process.exit(0);
+  });
 }
 
 if (require.main === module) {
-  // Run main and exit with appropriate code for CI/tests
-  main()
-    .then(() => {
-      if (process.env.TEST_NO_PROVIDER_START === 'true') process.exit(0);
-    })
-    .catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error(err);
-      process.exit(1);
-    });
+  main().catch((error) => {
+    logger.error('[STARTUP] Failed to start bot:', error);
+    process.exit(1);
+  });
 }
