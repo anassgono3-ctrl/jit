@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Backtest Results Schema",
+  "title": "Backtest Results",
   "type": "object",
   "required": [
     "results",
@@ -18,28 +18,32 @@
     "results": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "required": ["fixtureName", "planned", "simulated", "actualProfitUsd", "validation", "executionTimeMs"],
+        "properties": {
+          "fixtureName": { "type": "string" },
+          "planned": { "type": "boolean" },
+          "plan": { "type": ["object", "null"] },
+          "simulated": { "type": "boolean" },
+          "simulationResult": {},
+          "actualProfitUsd": { "type": "string" },
+          "validation": {
+            "type": "object",
+            "required": ["passed", "errors"],
+            "properties": {
+              "passed": { "type": "boolean" },
+              "errors": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "executionTimeMs": { "type": "number", "minimum": 0 }
+        }
       }
     },
-    "successRate": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1
-    },
-    "medianProfitUsd": {
-      "type": "number"
-    },
-    "worstProfitUsd": {
-      "type": "number"
-    },
-    "totalPlans": {
-      "type": "number",
-      "minimum": 0
-    },
-    "acceptedPlans": {
-      "type": "number",
-      "minimum": 0
-    },
+    "successRate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "medianProfitUsd": { "type": "number" },
+    "worstProfitUsd": { "type": "number" },
+    "totalPlans": { "type": "integer", "minimum": 0 },
+    "acceptedPlans": { "type": "integer", "minimum": 0 },
     "rejectionStats": {
       "type": "object",
       "required": [
@@ -50,16 +54,15 @@
         "inclusionProbTooLow"
       ],
       "properties": {
-        "profitBelowThreshold": { "type": "number", "minimum": 0 },
-        "minSwapUsdNotMet": { "type": "number", "minimum": 0 },
-        "liquidityNotViable": { "type": "number", "minimum": 0 },
-        "gasTooHigh": { "type": "number", "minimum": 0 },
-        "inclusionProbTooLow": { "type": "number", "minimum": 0 }
-      },
-      "additionalProperties": false
+        "profitBelowThreshold": { "type": "integer", "minimum": 0 },
+        "minSwapUsdNotMet": { "type": "integer", "minimum": 0 },
+        "liquidityNotViable": { "type": "integer", "minimum": 0 },
+        "gasTooHigh": { "type": "integer", "minimum": 0 },
+        "inclusionProbTooLow": { "type": "integer", "minimum": 0 }
+      }
     },
     "summary": {
-      "type": "object", 
+      "type": "object",
       "required": [
         "totalFixtures",
         "successfulPlans",
@@ -70,15 +73,14 @@
         "averageExecutionTimeMs"
       ],
       "properties": {
-        "totalFixtures": { "type": "number", "minimum": 0 },
-        "successfulPlans": { "type": "number", "minimum": 0 },
-        "profitableExecutions": { "type": "number", "minimum": 0 },
+        "totalFixtures": { "type": "integer", "minimum": 0 },
+        "successfulPlans": { "type": "integer", "minimum": 0 },
+        "profitableExecutions": { "type": "integer", "minimum": 0 },
         "totalProfitUsd": { "type": "string" },
         "averageProfitUsd": { "type": "string" },
         "successRate": { "type": "number", "minimum": 0, "maximum": 1 },
         "averageExecutionTimeMs": { "type": "number", "minimum": 0 }
-      },
-      "additionalProperties": false
+      }
     },
     "distribution": {
       "type": "object",
@@ -86,19 +88,14 @@
       "properties": {
         "profitBuckets": {
           "type": "object",
-          "additionalProperties": { "type": "number", "minimum": 0 }
+          "additionalProperties": { "type": "integer", "minimum": 0 }
         },
         "executionTimeBuckets": {
           "type": "object",
-          "additionalProperties": { "type": "number", "minimum": 0 }
+          "additionalProperties": { "type": "integer", "minimum": 0 }
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "timestamp": {
-      "type": "number",
-      "minimum": 0
-    }
-  },
-  "additionalProperties": false
+    "timestamp": { "type": "integer", "minimum": 0 }
+  }
 }
