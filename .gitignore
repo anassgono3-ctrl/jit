@@ -60,3 +60,7 @@ backtest_*.json
 
 # Metrics and monitoring
 prometheus_data/.nyc_output/
+
+# Hardhat
+cache/
+artifacts/
