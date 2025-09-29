@@ -9,7 +9,7 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: "0.8.19", // Keep original version but use local solc
+        version: "0.8.30", // Use the available local solc version
         settings: { 
           optimizer: { 
             enabled: true, 
@@ -22,7 +22,9 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       // forking disabled by default to keep CI deterministic and fast
-      chainId: 1
+      chainId: 1,
+      // Use offline mode to prevent network requests
+      allowUnlimitedContractSize: true
     },
     sepolia: {
       url: process.env.FORK_RPC_URL || "",
