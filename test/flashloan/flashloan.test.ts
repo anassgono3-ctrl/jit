@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-describe("MockVault flashLoan flow", function () {
-  it("receives flashloan and repays", async function () {
+describe("MockVault flashLoan flow with JIT skeleton", function () {
+  it("receives flashloan, executes JIT skeleton, emits events, and repays", async function () {
     const [deployer] = await ethers.getSigners();
 
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
@@ -24,16 +24,33 @@ describe("MockVault flashLoan flow", function () {
     const tokens = [token.target];
     const amounts = [ethers.parseEther("10")];
 
-    await vault.flashLoan(receiver.target, tokens, amounts, "0x");
+    const vaultBalanceBefore = await token.balanceOf(vault.target);
 
-    // If no revert: receiver repaid successfully
-    const vaultBalance = await token.balanceOf(vault.target);
-    expect(vaultBalance).to.be.at.least(amounts[0]); // at least principal (actually principal+fee)
-  });
+    // Execute flashloan
+    const tx = await vault.flashLoan(receiver.target, tokens, amounts, "0x");
+    const receipt = await tx.wait();
 
-  it("fails if receiver does not repay (placeholder)", async function () {
-    // To test failure, a deliberately 'bad' receiver would be needed.
-    // The default receiver always repays; keep this as documentation.
-    expect(true).to.equal(true);
+    // Verify repayment occurred
+    const vaultBalanceAfter = await token.balanceOf(vault.target);
+    expect(vaultBalanceAfter).to.be.at.least(vaultBalanceBefore);
+
+    // Verify events: FlashLoanReceived, StrategyStarted, FlashLoanRepaid (and possibly StrategySucceeded/Failed)
+    const iface = Receiver.interface;
+    const parsed = receipt!.logs
+      .map((log) => {
+        try {
+          return iface.parseLog(log);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as any[];
+
+    const names = parsed.map((e) => e.name);
+    expect(names).to.include("FlashLoanReceived");
+    expect(names).to.include("StrategyStarted");
+    expect(names).to.include("FlashLoanRepaid");
+    // At least one of succeed/failed should be present (skeleton emits Succeeded by default)
+    expect(names.some((n) => n === "StrategySucceeded" || n === "StrategyFailed")).to.equal(true);
   });
 });
