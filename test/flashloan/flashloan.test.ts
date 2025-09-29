@@ -37,7 +37,7 @@ describe("MockVault flashLoan flow with JIT skeleton", function () {
     // Verify events: FlashLoanReceived, StrategyStarted, FlashLoanRepaid (and possibly StrategySucceeded/Failed)
     const iface = Receiver.interface;
     const parsed = receipt!.logs
-      .map((log) => {
+      .map((log: any) => {
         try {
           return iface.parseLog(log);
         } catch {
