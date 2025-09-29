@@ -64,3 +64,4 @@ prometheus_data/.nyc_output/
 # Hardhat
 cache/
 artifacts/
+*.bin
