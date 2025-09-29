@@ -9,7 +9,7 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: "0.8.19", // Use the available local solc version
+        version: "0.8.19",
         settings: { 
           optimizer: { 
             enabled: true, 

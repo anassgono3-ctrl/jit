@@ -42,6 +42,12 @@ contract MockVault {
     function flashLoan(address recipient, address[] calldata tokens, uint256[] calldata amounts, bytes calldata userData) external {
         require(tokens.length == amounts.length, "mismatch");
 
+        // Track initial balances before transferring
+        uint256[] memory initialBalances = new uint256[](tokens.length);
+        for (uint i = 0; i < tokens.length; i++) {
+            initialBalances[i] = IERC20(tokens[i]).balanceOf(address(this));
+        }
+
         // Transfer tokens to recipient
         for (uint i = 0; i < tokens.length; i++) {
             IERC20(tokens[i]).transfer(recipient, amounts[i]);
@@ -58,9 +64,9 @@ contract MockVault {
 
         // After the call, check that this mock contract received repayment
         for (uint i = 0; i < tokens.length; i++) {
-            uint256 expected = amounts[i] + feeAmounts[i];
-            uint256 bal = IERC20(tokens[i]).balanceOf(address(this));
-            require(bal >= expected, "not repaid");
+            uint256 expectedBalance = initialBalances[i] + feeAmounts[i];
+            uint256 actualBalance = IERC20(tokens[i]).balanceOf(address(this));
+            require(actualBalance >= expectedBalance, "not repaid");
         }
     }
 
