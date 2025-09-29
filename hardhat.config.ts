@@ -21,10 +21,14 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      // forking disabled by default to keep CI deterministic and fast
       chainId: 1,
-      // Use offline mode to prevent network requests
-      allowUnlimitedContractSize: true
+      forking: process.env.FORK_RPC_URL
+        ? {
+            url: process.env.FORK_RPC_URL,
+            // Pin block for reproducibility; adjust as needed
+            blockNumber: 19000000
+          }
+        : undefined
     },
     sepolia: {
       url: process.env.FORK_RPC_URL || "",

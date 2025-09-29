@@ -2,18 +2,7 @@
 pragma solidity ^0.8.19;
 
 /*
-  Balancer Flashloan Receiver - JIT skeleton
-
-  This contract provides a professional scaffold for implementing a JIT
-  (Just-In-Time) liquidity flow inside a Balancer-style flashloan callback.
-
-  - The core flashloan callback remains minimal and must always repay amounts+fees.
-  - executeJitStrategy(...) is an internal hook where you will implement Uniswap V3
-    add/remove operations + optional swaps. This file documents exactly the expected
-    call patterns and provides safe fallbacks.
-  - For tests / local runs we keep the strategy non-destructive. Replace the
-    internal skeleton with your production logic only after thorough testing,
-    simulation, and audit.
+  Balancer Flashloan Receiver - JIT skeleton (repayment via approve for Vault pull)
 */
 
 interface IERC20 {
@@ -22,7 +11,6 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-/// Minimal Vault interface (flashLoan signature used by tests/mock)
 interface IVault {
     function flashLoan(address recipient, address[] calldata tokens, uint256[] calldata amounts, bytes calldata userData) external;
 }
@@ -93,18 +81,14 @@ contract BalancerFlashJitReceiver {
             // failure does not block repay in this skeleton
         }
 
-        // REPAY: transfer each token back with amount+fee
+        // Approve the vault (msg.sender) to pull principal+fee
         uint256 len = tokens.length;
         uint256[] memory amountsWithFee = new uint256[](len);
         for (uint256 i = 0; i < len; i++) {
             uint256 repay = amounts[i] + feeAmounts[i];
             amountsWithFee[i] = repay;
-
-            // For MockVault in tests, direct transfer is sufficient.
-            // For real Balancer vault, adapt to expected repay semantics (may require approve).
-            require(IERC20(tokens[i]).transfer(msg.sender, repay), "repay transfer failed");
+            require(IERC20(tokens[i]).approve(msg.sender, repay), "approve failed");
         }
-
         emit FlashLoanRepaid(msg.sender, tokens, amountsWithFee);
         return abi.encodePacked("OK");
     }
@@ -131,24 +115,7 @@ contract BalancerFlashJitReceiver {
         uint256[] memory /*feeAmounts*/,
         bytes memory /*userData*/
     ) internal {
-        // === Strategy skeleton (NO EXTERNAL DEX CALLS in template) ===
-        // Step 1: Compute basic metrics (example placeholders)
-        //   - expectedGasUsd = estimateGas() * gasPrice * ethUsd
-        //   - expectedGrossProfit = function of observed swap
-        // Step 2: Check profit thresholds (MIN_PROFIT_USD, etc.) — off-chain or via constants
-        // Step 3: If proceeding, perform:
-        //   a) addLiquidity (Uniswap V3 mint)
-        //   b) run observed swap / matching ops (off-chain bundle or simulated path)
-        //   c) removeLiquidity and collect fees
-        // Step 4: ensure repay amounts are available and leave no idle funds
-        //
-        // The real implementation must:
-        //  - ensure approvals for involved tokens
-        //  - handle multi-token flows robustly
-        //  - compute exact repayment inclusive of fees
-        //  - revert on irrecoverable errors
-        //
-        // Template does nothing (safe no-op).
+        // no-op skeleton (replace with production logic)
     }
 
     // Admin helpers
