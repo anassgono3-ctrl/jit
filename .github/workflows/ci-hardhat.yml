@@ -1,0 +1,25 @@
+name: CI - Hardhat contracts
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci
+      - name: Build TS
+        run: npm run build
+      - name: Run hardhat tests
+        run: npx hardhat test
+      - name: Upload artifacts (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardhat-artifacts
+          path: artifacts
