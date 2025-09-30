@@ -10,6 +10,10 @@ const blockNumber =
     ? Number(process.env.FORK_BLOCK_NUMBER)
     : defaultPinnedBlock;
 
+const mochaTimeout = process.env.MOCHA_TIMEOUT_MS
+  ? Number(process.env.MOCHA_TIMEOUT_MS)
+  : 120_000; // 2 minutes default
+
 const config: HardhatUserConfig = {
   solidity: {
     compilers: [
@@ -35,6 +39,10 @@ const config: HardhatUserConfig = {
       url: process.env.FORK_RPC_URL || "",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : []
     }
+  },
+  mocha: {
+    timeout: mochaTimeout,
+    slow: 6000
   },
   paths: {
     sources: "contracts",
