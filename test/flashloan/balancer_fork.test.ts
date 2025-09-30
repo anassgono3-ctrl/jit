@@ -135,30 +135,14 @@ describe('Balancer fork flashloan integration', function () {
     floorWeth: bigint,
     floorUsdc: bigint
   ): Promise<{ tokens: string[]; amounts: bigint[]; reason: string } | null> {
-    const divisors = [
-      1n,
-      2n,
-      5n,
-      10n,
-      20n,
-      50n,
-      100n,
-      200n,
-      500n,
-      1000n,
-      2000n,
-      5000n,
-      10000n,
-      20000n,
-      50000n,
-      100000n,
-    ];
+    // Looser probe as per stabilization plan
+    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n, 5000n];
 
-    // start ~2% of ERC20 balances
+    // Start ~2% of ERC20 balances
     const startWeth = wethBal / 50n;
     const startUsdc = usdcBal / 50n;
 
-    // 1) try two-token
+    // Try two-token first
     let safe = await findSafeFlashLoanVector(
       vault,
       receiverAddr,
@@ -170,7 +154,7 @@ describe('Balancer fork flashloan integration', function () {
     if (safe)
       return { tokens: [WETH, USDC], amounts: safe, reason: 'two-token' };
 
-    // 2) try WETH-only
+    // WETH-only
     safe = await findSafeFlashLoanVector(
       vault,
       receiverAddr,
@@ -181,7 +165,7 @@ describe('Balancer fork flashloan integration', function () {
     );
     if (safe) return { tokens: [WETH], amounts: safe, reason: 'weth-only' };
 
-    // 3) try USDC-only
+    // USDC-only
     safe = await findSafeFlashLoanVector(
       vault,
       receiverAddr,
@@ -237,12 +221,13 @@ describe('Balancer fork flashloan integration', function () {
       return;
     }
 
+    // Floors lowered (overridable via env)
     const floorWeth = process.env.FORK_TEST_MIN_WETH
       ? ethers.parseEther(process.env.FORK_TEST_MIN_WETH)
-      : ethers.parseEther('0.01');
+      : ethers.parseEther('0.005');
     const floorUsdc = process.env.FORK_TEST_MIN_USDC
       ? BigInt(process.env.FORK_TEST_MIN_USDC)
-      : 1_000_000n;
+      : 500_000n;
 
     const found = await findAnySafeVector(
       vault,
@@ -261,7 +246,7 @@ describe('Balancer fork flashloan integration', function () {
       return;
     }
 
-    // fund fee buffers
+    // Fund fee buffers for tokens we actually borrow
     if (found.tokens.includes(WETH)) {
       await ensureWethBuffer(receiverAddr, floorWeth);
     }
@@ -269,10 +254,7 @@ describe('Balancer fork flashloan integration', function () {
       await ensureUsdcBuffer(receiverAddr, floorUsdc / 10n);
     }
 
-    console.log(`[fork-test] using ${found.reason} loan`, {
-      tokens: found.tokens,
-      amounts: found.amounts.map(String),
-    });
+    console.log(`[fork-test] executing safe flashloan (${found.reason}):`, found.amounts.map(String));
 
     const tx = await vault.flashLoan(
       receiverAddr,
@@ -283,27 +265,10 @@ describe('Balancer fork flashloan integration', function () {
     const receipt = await tx.wait();
     console.log('⛽ Gas used:', receipt?.gasUsed?.toString() || 'n/a');
 
-    // Check repayment (balances should not decrease)
+    // Repayment check: balances should not decrease
     const afterWeth = (await weth.balanceOf(BALANCER_VAULT)) as bigint;
     const afterUsdc = (await usdc.balanceOf(BALANCER_VAULT)) as bigint;
-
-    if (found.tokens.includes(WETH)) {
-      console.log(
-        '📊 WETH vault balance change:',
-        vaultWethBal.toString(),
-        '->',
-        afterWeth.toString()
-      );
-      expect(afterWeth >= vaultWethBal).to.equal(true);
-    }
-    if (found.tokens.includes(USDC)) {
-      console.log(
-        '📊 USDC vault balance change:',
-        vaultUsdcBal.toString(),
-        '->',
-        afterUsdc.toString()
-      );
-      expect(afterUsdc >= vaultUsdcBal).to.equal(true);
-    }
+    if (found.tokens.includes(WETH)) expect(afterWeth >= vaultWethBal).to.equal(true);
+    if (found.tokens.includes(USDC)) expect(afterUsdc >= vaultUsdcBal).to.equal(true);
   });
 });

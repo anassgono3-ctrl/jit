@@ -3,10 +3,12 @@ import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
 dotenv.config();
 
+// Default to a "known-good" block for Balancer flashloans; still overridable via FORK_BLOCK_NUMBER
+const defaultPinnedBlock = 19350000; // ~2025-01-20
 const blockNumber =
   process.env.FORK_BLOCK_NUMBER && !Number.isNaN(Number(process.env.FORK_BLOCK_NUMBER))
     ? Number(process.env.FORK_BLOCK_NUMBER)
-    : 19000000;
+    : defaultPinnedBlock;
 
 const config: HardhatUserConfig = {
   solidity: {
