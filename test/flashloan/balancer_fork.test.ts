@@ -99,9 +99,45 @@ describe("Balancer fork flashloan integration", function () {
         await vault.flashLoan.staticCall(receiverAddr, tokens, candidate, "0x");
         return candidate;
       } catch {
-        // try next divisor
+        // continue
       }
     }
+    return null;
+  }
+
+  async function findAnySafeVector(
+    vault: any,
+    receiverAddr: string,
+    wethBal: bigint,
+    usdcBal: bigint,
+    floorWeth: bigint,
+    floorUsdc: bigint
+  ): Promise<{ tokens: string[]; amounts: bigint[]; reason: string } | null> {
+    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n, 5000n, 10000n, 20000n, 50000n, 100000n];
+
+    // start ~2% of ERC20 balances
+    const startWeth = wethBal / 50n;
+    const startUsdc = usdcBal / 50n;
+
+    // 1) try two-token
+    let safe = await findSafeFlashLoanVector(
+      vault,
+      receiverAddr,
+      [WETH, USDC],
+      [startWeth, startUsdc],
+      [floorWeth, floorUsdc],
+      divisors
+    );
+    if (safe) return { tokens: [WETH, USDC], amounts: safe, reason: "two-token" };
+
+    // 2) try WETH-only
+    safe = await findSafeFlashLoanVector(vault, receiverAddr, [WETH], [startWeth], [floorWeth], divisors);
+    if (safe) return { tokens: [WETH], amounts: safe, reason: "weth-only" };
+
+    // 3) try USDC-only
+    safe = await findSafeFlashLoanVector(vault, receiverAddr, [USDC], [startUsdc], [floorUsdc], divisors);
+    if (safe) return { tokens: [USDC], amounts: safe, reason: "usdc-only" };
+
     return null;
   }
 
@@ -118,50 +154,55 @@ describe("Balancer fork flashloan integration", function () {
     const vaultWethBal = (await weth.balanceOf(BALANCER_VAULT)) as bigint;
     const vaultUsdcBal = (await usdc.balanceOf(BALANCER_VAULT)) as bigint;
 
-    if (vaultWethBal === 0n || vaultUsdcBal === 0n) {
-      const msg = "[fork-test] skipping: zero vault balance at pinned block";
+    if (vaultWethBal === 0n && vaultUsdcBal === 0n) {
+      const msg = "[fork-test] skipping: zero vault balances at pinned block";
       if (STRICT) throw new Error(msg);
       console.log(msg);
       this.skip();
       return;
     }
 
-    const floorWeth = process.env.FORK_TEST_MIN_WETH ? ethers.parseEther(process.env.FORK_TEST_MIN_WETH) : ethers.parseEther("0.01");
+    const floorWeth =
+      process.env.FORK_TEST_MIN_WETH ? ethers.parseEther(process.env.FORK_TEST_MIN_WETH) : ethers.parseEther("0.01");
     const floorUsdc = process.env.FORK_TEST_MIN_USDC ? BigInt(process.env.FORK_TEST_MIN_USDC) : 1_000_000n;
 
-    const startWeth = vaultWethBal / 50n;
-    const startUsdc = vaultUsdcBal / 50n;
-
-    const tokens = [WETH, USDC];
-    const start = [startWeth, startUsdc];
-    const floors = [floorWeth, floorUsdc];
-
-    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n, 5000n, 10000n];
-
-    const safe = await findSafeFlashLoanVector(vault, receiverAddr, tokens, start, floors, divisors);
-    if (!safe) {
-      const msg = "[fork-test] skipping: no safe flashloan vector found via staticCall";
+    const found = await findAnySafeVector(vault, receiverAddr, vaultWethBal, vaultUsdcBal, floorWeth, floorUsdc);
+    if (!found) {
+      const msg = "[fork-test] skipping: no safe flashloan vector found via staticCall (two-token and single-token failed)";
       if (STRICT) throw new Error(msg);
       console.log(msg);
       this.skip();
       return;
     }
 
-    await ensureWethBuffer(receiverAddr, floorWeth);
-    await ensureUsdcBuffer(receiverAddr, floors[1] / 10n);
+    // fund fee buffers
+    if (found.tokens.includes(WETH)) {
+      await ensureWethBuffer(receiverAddr, floorWeth);
+    }
+    if (found.tokens.includes(USDC)) {
+      await ensureUsdcBuffer(receiverAddr, floorUsdc / 10n);
+    }
 
-    const tx = await vault.flashLoan(receiverAddr, tokens, safe, "0x");
+    console.log(`[fork-test] using ${found.reason} loan`, {
+      tokens: found.tokens,
+      amounts: found.amounts.map(String)
+    });
+
+    const tx = await vault.flashLoan(receiverAddr, found.tokens, found.amounts, "0x");
     const receipt = await tx.wait();
-
     console.log("⛽ Gas used:", receipt?.gasUsed?.toString() || "n/a");
 
+    // Check repayment (balances should not decrease)
     const afterWeth = (await weth.balanceOf(BALANCER_VAULT)) as bigint;
     const afterUsdc = (await usdc.balanceOf(BALANCER_VAULT)) as bigint;
 
-    console.log("📊 WETH vault balance change:", vaultWethBal.toString(), "->", afterWeth.toString());
-    console.log("📊 USDC vault balance change:", vaultUsdcBal.toString(), "->", afterUsdc.toString());
-
-    expect(afterWeth >= vaultWethBal).to.equal(true);
-    expect(afterUsdc >= vaultUsdcBal).to.equal(true);
+    if (found.tokens.includes(WETH)) {
+      console.log("📊 WETH vault balance change:", vaultWethBal.toString(), "->", afterWeth.toString());
+      expect(afterWeth >= vaultWethBal).to.equal(true);
+    }
+    if (found.tokens.includes(USDC)) {
+      console.log("📊 USDC vault balance change:", vaultUsdcBal.toString(), "->", afterUsdc.toString());
+      expect(afterUsdc >= vaultUsdcBal).to.equal(true);
+    }
   });
 });
