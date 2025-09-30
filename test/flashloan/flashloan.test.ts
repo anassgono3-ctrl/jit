@@ -87,7 +87,19 @@ describe("MockVault flashLoan flow with JIT skeleton", function () {
     const tokens = [tokenAddr];
     const amounts = [ethers.parseEther("10")];
 
-    await expect(vault.flashLoan(badAddr, tokens, amounts, "0x")).to.be.revertedWith("not repaid");
+    // Because MockVault now pulls with transferFrom, the ERC20 mock can revert with
+    // "allowance" or "balance" before MockVault's require("not repaid") triggers.
+    // Make the test robust by accepting any of these revert reasons.
+    try {
+      await vault.flashLoan(badAddr, tokens, amounts, "0x");
+      expect.fail("flashLoan should have reverted for non-repaying receiver");
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      expect(
+        /(not repaid|allowance|balance)/i.test(msg),
+        `Expected revert reason to include "not repaid", "allowance", or "balance" but got: ${msg}`
+      ).to.equal(true);
+    }
   });
 
   it("handles multi-token flashloan (principal+fee for each token)", async function () {
