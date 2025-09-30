@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import logger from './modules/logger';
 import { loadConfig, getConfigSummary } from './config';
+import { startHealthServer } from './health';
 
 function validateLiveMode() {
   const cfg = loadConfig();
@@ -16,6 +17,9 @@ function validateLiveMode() {
     }
   } else {
     logger.info('[STARTUP] DRY_RUN=true (simulation mode).');
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn('[STARTUP] DRY_RUN=true while NODE_ENV=production. Are you intentionally running in sim mode?');
+    }
   }
 }
 
@@ -33,9 +37,12 @@ export async function main(opts: { testMode?: boolean } = {}) {
     return;
   }
 
+  // Health/metrics server
+  const healthPort = Number(process.env.HEALTHCHECK_PORT || 9090);
+  startHealthServer(healthPort);
+
   // Enable mempool only when explicitly configured, and only in live mode
   if (cfg.ENABLE_MEMPOOL && !cfg.DRY_RUN) {
-    // dynamic import to avoid side effects during tests
     const { MempoolOrchestrator } = await import('./runtime/mempool/orchestrator');
     const orchestrator = new MempoolOrchestrator();
     await orchestrator.start();
