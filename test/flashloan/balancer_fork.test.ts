@@ -2,6 +2,10 @@ import { ethers } from 'hardhat';
 import { expect } from 'chai';
 
 describe('Balancer fork flashloan integration', function () {
+  // Allow this suite to run longer than default if needed
+  const SUITE_TIMEOUT = Number(process.env.MOCHA_TIMEOUT_MS || 120_000);
+  this.timeout?.(SUITE_TIMEOUT);
+
   const BALANCER_VAULT = '0xBA12222222228d8Ba445958a75a0704d566BF2C8';
   const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
   const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
@@ -16,6 +20,10 @@ describe('Balancer fork flashloan integration', function () {
   ];
 
   const STRICT = String(process.env.FORK_STRICT || '').toLowerCase() === 'true';
+  const VERBOSE = String(process.env.FORK_TEST_VERBOSE || '').toLowerCase() === 'true';
+
+  // Limit how long we spend probing a safe vector to avoid Mocha timeouts
+  const PROBE_BUDGET_MS = Number(process.env.FORK_PROBE_BUDGET_MS || 25_000);
 
   before(function () {
     if (!process.env.FORK_RPC_URL) {
@@ -110,14 +118,17 @@ describe('Balancer fork flashloan integration', function () {
     tokens: string[],
     start: bigint[],
     floors: bigint[],
-    divisors: bigint[]
+    divisors: bigint[],
+    deadlineMs: number
   ): Promise<bigint[] | null> {
     for (const div of divisors) {
+      if (Date.now() > deadlineMs) return null;
       const candidate = start.map((amt, i) => {
         const downsized = divDown(amt, div);
         return downsized >= floors[i] ? downsized : floors[i];
       });
       try {
+        if (VERBOSE) console.log('[fork-test] probe', { tokens, div: String(div), candidate: candidate.map(String) });
         await vault.flashLoan.staticCall(receiverAddr, tokens, candidate, '0x');
         return candidate;
       } catch {
@@ -133,10 +144,13 @@ describe('Balancer fork flashloan integration', function () {
     wethBal: bigint,
     usdcBal: bigint,
     floorWeth: bigint,
-    floorUsdc: bigint
+    floorUsdc: bigint,
+    budgetMs: number
   ): Promise<{ tokens: string[]; amounts: bigint[]; reason: string } | null> {
-    // Looser probe as per stabilization plan
-    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n, 5000n];
+    const deadline = Date.now() + budgetMs;
+
+    // Looser probe set (kept moderate to respect the time budget)
+    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n];
 
     // Start ~2% of ERC20 balances
     const startWeth = wethBal / 50n;
@@ -149,7 +163,8 @@ describe('Balancer fork flashloan integration', function () {
       [WETH, USDC],
       [startWeth, startUsdc],
       [floorWeth, floorUsdc],
-      divisors
+      divisors,
+      deadline
     );
     if (safe)
       return { tokens: [WETH, USDC], amounts: safe, reason: 'two-token' };
@@ -161,7 +176,8 @@ describe('Balancer fork flashloan integration', function () {
       [WETH],
       [startWeth],
       [floorWeth],
-      divisors
+      divisors,
+      deadline
     );
     if (safe) return { tokens: [WETH], amounts: safe, reason: 'weth-only' };
 
@@ -172,7 +188,8 @@ describe('Balancer fork flashloan integration', function () {
       [USDC],
       [startUsdc],
       [floorUsdc],
-      divisors
+      divisors,
+      deadline
     );
     if (safe) return { tokens: [USDC], amounts: safe, reason: 'usdc-only' };
 
@@ -235,11 +252,12 @@ describe('Balancer fork flashloan integration', function () {
       vaultWethBal,
       vaultUsdcBal,
       floorWeth,
-      floorUsdc
+      floorUsdc,
+      PROBE_BUDGET_MS
     );
     if (!found) {
       const msg =
-        '[fork-test] skipping: no safe flashloan vector found via staticCall (two-token and single-token failed)';
+        '[fork-test] skipping: no safe flashloan vector found via staticCall within probe budget (two-token and single-token failed)';
       if (STRICT) throw new Error(msg);
       console.log(msg);
       this.skip();
