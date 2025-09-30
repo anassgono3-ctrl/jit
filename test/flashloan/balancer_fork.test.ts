@@ -73,7 +73,9 @@ describe("Balancer fork flashloan integration", function () {
           await tx.wait();
           const got = (await weth.balanceOf(receiver)) as bigint;
           if (got >= minBuffer) return;
-        } catch {}
+        } catch {
+          // try next whale
+        }
       }
       throw new Error(`Failed to fund WETH buffer for receiver`);
     } else {
@@ -89,7 +91,9 @@ describe("Balancer fork flashloan integration", function () {
             const got = (await erc.balanceOf(receiver)) as bigint;
             if (got >= minBuffer) return;
           }
-        } catch {}
+        } catch {
+          // try next whale
+        }
       }
       throw new Error(`Failed to fund ${sym} buffer for receiver`);
     }
