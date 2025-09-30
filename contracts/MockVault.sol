@@ -2,9 +2,10 @@
 pragma solidity ^0.8.19;
 
 /*
- Simple MockVault that simulates a Balancer flashLoan call.
- It transfers tokens to the recipient and then calls receiveFlashLoan.
- This mock is for local testing only. It keeps logic simple and safe.
+ MockVault (updated) now mirrors Balancer Vault repayment semantics:
+ - Sends principal to the receiver
+ - Calls receiveFlashLoan on the receiver
+ - Pulls principal+fee back via transferFrom (requires receiver to approve)
 */
 
 interface IERC20 {
@@ -24,11 +25,10 @@ interface IFlashLoanRecipient {
 }
 
 contract MockVault {
-    // fee rate in bps (for example 5 => 0.05%)
+    // fee rate in bps (e.g., 5 => 0.05%)
     uint256 public feeBps = 5;
-
-    // admin
     address public owner;
+
     constructor() {
         owner = msg.sender;
     }
@@ -38,40 +38,32 @@ contract MockVault {
         feeBps = bps;
     }
 
-    // tokens and amounts arrays must match length
     function flashLoan(address recipient, address[] calldata tokens, uint256[] calldata amounts, bytes calldata userData) external {
         require(tokens.length == amounts.length, "mismatch");
 
-        // Track initial balances before transferring
-        uint256[] memory initialBalances = new uint256[](tokens.length);
+        // Transfer principal to recipient
         for (uint i = 0; i < tokens.length; i++) {
-            initialBalances[i] = IERC20(tokens[i]).balanceOf(address(this));
+            require(IERC20(tokens[i]).transfer(recipient, amounts[i]), "send principal failed");
         }
 
-        // Transfer tokens to recipient
-        for (uint i = 0; i < tokens.length; i++) {
-            IERC20(tokens[i]).transfer(recipient, amounts[i]);
-        }
-
-        // compute fee amounts
+        // Compute fees
         uint256[] memory feeAmounts = new uint256[](amounts.length);
         for (uint i = 0; i < amounts.length; i++) {
             feeAmounts[i] = (amounts[i] * feeBps) / 10000;
         }
 
-        // Call recipient (simulate Vault calling)
+        // Callback
         IFlashLoanRecipient(recipient).receiveFlashLoan(tokens, amounts, feeAmounts, userData);
 
-        // After the call, check that this mock contract received repayment
+        // Pull repayment (principal + fee) from receiver
         for (uint i = 0; i < tokens.length; i++) {
-            uint256 expectedBalance = initialBalances[i] + feeAmounts[i];
-            uint256 actualBalance = IERC20(tokens[i]).balanceOf(address(this));
-            require(actualBalance >= expectedBalance, "not repaid");
+            uint256 expected = amounts[i] + feeAmounts[i];
+            require(IERC20(tokens[i]).transferFrom(recipient, address(this), expected), "not repaid");
         }
     }
 
-    // For tests: allow funding the vault with mock tokens
+    // Helper to fund this mock in tests
     function fundToken(address token, uint256 amount) external {
-        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        require(IERC20(token).transferFrom(msg.sender, address(this), amount), "fund failed");
     }
 }

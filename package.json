@@ -8,6 +8,7 @@
     "test": "mocha -r ts-node/register -r dotenv/config tests/**/*.test.ts --timeout 20000",
     "test:coverage": "nyc --reporter=text --reporter=html --reporter=lcov npm test",
     "test:hardhat": "npx hardhat test",
+    "test:fork": "FORK_RPC_URL=$FORK_RPC_URL npx hardhat test --grep 'Balancer fork'",
     "hardhat": "npx hardhat",
     "validate:contracts": "node validate-contracts.js",
     "backtest": "node -r ts-node/register src/backtest/runner.ts",
