@@ -3,16 +3,14 @@ import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
 dotenv.config();
 
-// Default to a "known-good" block for Balancer flashloans; still overridable via FORK_BLOCK_NUMBER
-const defaultPinnedBlock = 19350000; // ~2025-01-20
+// Default "known-good" block; test may programmatically reset to others
+const defaultPinnedBlock = 19350000;
 const blockNumber =
   process.env.FORK_BLOCK_NUMBER && !Number.isNaN(Number(process.env.FORK_BLOCK_NUMBER))
     ? Number(process.env.FORK_BLOCK_NUMBER)
     : defaultPinnedBlock;
 
-const mochaTimeout = process.env.MOCHA_TIMEOUT_MS
-  ? Number(process.env.MOCHA_TIMEOUT_MS)
-  : 120_000; // 2 minutes default
+const mochaTimeout = process.env.MOCHA_TIMEOUT_MS ? Number(process.env.MOCHA_TIMEOUT_MS) : 120_000;
 
 const config: HardhatUserConfig = {
   solidity: {
