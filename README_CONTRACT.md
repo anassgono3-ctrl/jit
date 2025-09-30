@@ -16,28 +16,31 @@ This folder contains a minimal Hardhat + TypeScript contract scaffold that demon
 1. `npm ci`
 2. `npm run test:hardhat` (or `npx hardhat test`)
 
-## Fork testing
-To run mainnet fork tests against the real Balancer Vault:
+## Fork tests (mainnet-fork with real Balancer Vault)
 
-1. Set `.env`:
-   ```
-   FORK_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-   # optional tweaks
-   # FORK_BLOCK_NUMBER=19123456
-   # FORK_TEST_MIN_WETH=0.01
-   # FORK_TEST_MIN_USDC=1000000
-   # FORK_STRICT=true
-   ```
-2. Run local unit tests:
-   ```
-   npm run test:hardhat
-   ```
-3. Run Balancer fork test:
-   ```
-   npm run test:fork
-   ```
+We pin the fork to a "known-good" mainnet block for stability:
 
-The fork test uses `staticCall` probing to find safe flashloan amounts and auto-downsizes to avoid BAL#102 errors. Set `FORK_STRICT=true` to fail rather than skip when conditions are not met.
+- Default pinned block: `19350000` (overridable via `FORK_BLOCK_NUMBER` in `.env`).
+- If the Balancer Vault has flashloans disabled at the pinned block (BAL#102), the test will either skip (default) or fail in strict mode.
+
+Env options:
+```
+FORK_RPC_URL=...
+FORK_BLOCK_NUMBER=19350000      # override if needed
+FORK_TEST_MIN_WETH=0.005        # default probe floor for WETH
+FORK_TEST_MIN_USDC=500000       # 0.5 USDC (6 decimals)
+FORK_STRICT=false               # true to fail instead of skip when unsafe
+```
+
+Run:
+```
+npm run test:fork         # skip when unsafe
+npm run test:fork:strict  # fail when unsafe
+```
+
+Rationale:
+- Pinning makes CI/dev runs reproducible.
+- Looser floors and size-probing reduce flakiness from Vault checks while staying conservative.
 
 ## Files
 - `contracts/BalancerFlashJitReceiver.sol` — JIT receiver skeleton with lifecycle events.
