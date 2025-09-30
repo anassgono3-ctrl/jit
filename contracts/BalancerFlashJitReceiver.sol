@@ -3,21 +3,14 @@ pragma solidity ^0.8.19;
 
 /*
   Balancer Flashloan Receiver - JIT skeleton (repayment via approve for Vault pull)
+
+  NOTE: Interfaces are imported from contracts/interfaces to avoid duplicate artifacts.
 */
 
-interface IERC20 {
-    function balanceOf(address) external view returns (uint256);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function approve(address spender, uint256 amount) external returns (bool);
-}
+import { IERC20 } from "./interfaces/IERC20.sol";
+import { IVault } from "./interfaces/IVault.sol";
 
-interface IVault {
-    function flashLoan(address recipient, address[] calldata tokens, uint256[] calldata amounts, bytes calldata userData) external;
-}
-
-/// Optional Uniswap V3-like position manager interface (illustrative - to be adapted)
 interface IUniswapV3PositionManager {
-    // simplified placeholders; adapt to canonical interface when implementing
     function mint(bytes calldata params) external returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
     function decreaseLiquidity(bytes calldata params) external returns (uint256 amount0, uint256 amount1);
     function collect(bytes calldata params) external returns (uint256 amount0, uint256 amount1);

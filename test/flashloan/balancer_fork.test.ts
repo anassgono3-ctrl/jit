@@ -8,15 +8,20 @@ describe("Balancer fork flashloan integration", function () {
 
   const WETH_WHALES = [
     "0x06920C9fC643De77B99cB7670A944AD31eaAA260",
-    "0x28C6c06298d514Db089934071355E5743bf21d60" // backup
+    "0x28C6c06298d514Db089934071355E5743bf21d60"
   ];
   const USDC_WHALES = [
     "0xF977814e90dA44bFA03b6295A0616a897441aceC",
     "0x28C6c06298d514Db089934071355E5743bf21d60"
   ];
 
+  const STRICT = String(process.env.FORK_STRICT || "").toLowerCase() === "true";
+
   before(function () {
-    if (!process.env.FORK_RPC_URL) this.skip();
+    if (!process.env.FORK_RPC_URL) {
+      console.log("[fork-test] skipping: FORK_RPC_URL not set");
+      this.skip();
+    }
   });
 
   async function impersonate(addr: string) {
@@ -73,19 +78,17 @@ describe("Balancer fork flashloan integration", function () {
     throw new Error("Failed to fund USDC buffer for receiver on fork");
   }
 
-  // Helper: scale a bigint array by a divisor (rounding down)
   function divDown(x: bigint, d: bigint): bigint {
     return x / d;
   }
 
-  // Try to find a safe flashloan vector by probing with staticCall and downsizing
   async function findSafeFlashLoanVector(
     vault: any,
     receiverAddr: string,
     tokens: string[],
     start: bigint[],
     floors: bigint[],
-    divisors: bigint[] // candidates to divide by (e.g., [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n])
+    divisors: bigint[]
   ): Promise<bigint[] | null> {
     for (const div of divisors) {
       const candidate = start.map((amt, i) => {
@@ -93,9 +96,8 @@ describe("Balancer fork flashloan integration", function () {
         return downsized >= floors[i] ? downsized : floors[i];
       });
       try {
-        // ethers v6 static call
         await vault.flashLoan.staticCall(receiverAddr, tokens, candidate, "0x");
-        return candidate; // success
+        return candidate;
       } catch {
         // try next divisor
       }
@@ -109,54 +111,50 @@ describe("Balancer fork flashloan integration", function () {
     await receiver.waitForDeployment();
     const receiverAddr = await receiver.getAddress();
 
-    // Use fully qualified names to avoid HH701
     const vault = await ethers.getContractAt("contracts/interfaces/IVault.sol:IVault", BALANCER_VAULT);
     const weth = await ethers.getContractAt("contracts/interfaces/IERC20.sol:IERC20", WETH);
     const usdc = await ethers.getContractAt("contracts/interfaces/IERC20.sol:IERC20", USDC);
 
-    // Live Vault balances (not the same as "flashable", but good for upper bounds)
     const vaultWethBal = (await weth.balanceOf(BALANCER_VAULT)) as bigint;
     const vaultUsdcBal = (await usdc.balanceOf(BALANCER_VAULT)) as bigint;
 
     if (vaultWethBal === 0n || vaultUsdcBal === 0n) {
+      const msg = "[fork-test] skipping: zero vault balance at pinned block";
+      if (STRICT) throw new Error(msg);
+      console.log(msg);
       this.skip();
       return;
     }
 
-    // Start amounts: conservative fraction of ERC20 balances
-    // We'll still probe with staticCall to be safe.
-    const startWeth = vaultWethBal / 50n; // ~2% to start
+    const floorWeth = process.env.FORK_TEST_MIN_WETH ? ethers.parseEther(process.env.FORK_TEST_MIN_WETH) : ethers.parseEther("0.01");
+    const floorUsdc = process.env.FORK_TEST_MIN_USDC ? BigInt(process.env.FORK_TEST_MIN_USDC) : 1_000_000n;
+
+    const startWeth = vaultWethBal / 50n;
     const startUsdc = vaultUsdcBal / 50n;
 
-    // Floors to keep the test meaningful
-    const floorWeth = ethers.parseEther("0.01"); // 0.01 WETH
-    const floorUsdc = 1_000_000n;                // 1 USDC
-
-    // Divisors to try (progressively smaller)
-    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n];
-
-    // Probe
     const tokens = [WETH, USDC];
     const start = [startWeth, startUsdc];
     const floors = [floorWeth, floorUsdc];
 
+    const divisors = [1n, 2n, 5n, 10n, 20n, 50n, 100n, 200n, 500n, 1000n, 2000n, 5000n, 10000n];
+
     const safe = await findSafeFlashLoanVector(vault, receiverAddr, tokens, start, floors, divisors);
     if (!safe) {
-      this.skip(); // Could not find a safe vector at this fork block/provider; skip rather than fail
+      const msg = "[fork-test] skipping: no safe flashloan vector found via staticCall";
+      if (STRICT) throw new Error(msg);
+      console.log(msg);
+      this.skip();
       return;
     }
 
-    // Fee buffers for receiver so Vault can pull principal+fee
-    await ensureWethBuffer(receiverAddr, ethers.parseEther("0.02"));
-    await ensureUsdcBuffer(receiverAddr, 200_000n);
+    await ensureWethBuffer(receiverAddr, floorWeth);
+    await ensureUsdcBuffer(receiverAddr, floors[1] / 10n);
 
-    // Execute flashloan with safe vector
     const tx = await vault.flashLoan(receiverAddr, tokens, safe, "0x");
     const receipt = await tx.wait();
 
     console.log("⛽ Gas used:", receipt?.gasUsed?.toString() || "n/a");
 
-    // Check Vault balances increased or remained (repayment)
     const afterWeth = (await weth.balanceOf(BALANCER_VAULT)) as bigint;
     const afterUsdc = (await usdc.balanceOf(BALANCER_VAULT)) as bigint;
 

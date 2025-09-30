@@ -16,10 +16,35 @@ This folder contains a minimal Hardhat + TypeScript contract scaffold that demon
 1. `npm ci`
 2. `npm run test:hardhat` (or `npx hardhat test`)
 
+## Fork testing
+To run mainnet fork tests against the real Balancer Vault:
+
+1. Set `.env`:
+   ```
+   FORK_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+   # optional tweaks
+   # FORK_BLOCK_NUMBER=19123456
+   # FORK_TEST_MIN_WETH=0.01
+   # FORK_TEST_MIN_USDC=1000000
+   # FORK_STRICT=true
+   ```
+2. Run local unit tests:
+   ```
+   npm run test:hardhat
+   ```
+3. Run Balancer fork test:
+   ```
+   npm run test:fork
+   ```
+
+The fork test uses `staticCall` probing to find safe flashloan amounts and auto-downsizes to avoid BAL#102 errors. Set `FORK_STRICT=true` to fail rather than skip when conditions are not met.
+
 ## Files
 - `contracts/BalancerFlashJitReceiver.sol` — JIT receiver skeleton with lifecycle events.
 - `contracts/MockVault.sol` — local mock to test flashloan flow end-to-end.
+- `contracts/interfaces/` — shared interface definitions (IERC20, IVault) to avoid duplicate artifacts.
 - `test/flashloan/flashloan.test.ts` — unit tests asserting repayment and event emission.
+- `test/flashloan/balancer_fork.test.ts` — mainnet fork integration test with real Balancer Vault.
 
 ## How to implement the JIT logic
 1. Implement `_executeJitStrategy(...)`:
