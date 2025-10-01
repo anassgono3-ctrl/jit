@@ -2,6 +2,9 @@ import 'dotenv/config';
 import logger from './modules/logger';
 import { loadConfig, getConfigSummary } from './config';
 import { startHealthServer } from './health';
+import { ethers } from 'ethers';
+import { executeFlashloanSwapRepay } from './execution/flashloan/path';
+import { startPendingSwapWatcher } from './runtime/mempool/strategy/pendingSwapWatcher';
 
 function validateLiveMode() {
   const cfg = loadConfig();
@@ -41,14 +44,45 @@ export async function main(opts: { testMode?: boolean } = {}) {
   const healthPort = Number(process.env.HEALTHCHECK_PORT || 9090);
   startHealthServer(healthPort);
 
-  // Enable mempool only when explicitly configured, and only in live mode
-  if (cfg.ENABLE_MEMPOOL && !cfg.DRY_RUN) {
-    const { MempoolOrchestrator } = await import('./runtime/mempool/orchestrator');
-    const orchestrator = new MempoolOrchestrator();
-    await orchestrator.start();
-    logger.info('[STARTUP] Mempool orchestrator started');
+  // Build provider/signer for optional execution & mempool
+  let rpc: string | undefined;
+  if (cfg.PRIMARY_RPC_HTTP) {
+    rpc = cfg.PRIMARY_RPC_HTTP;
+  } else if (cfg.RPC_PROVIDERS && cfg.RPC_PROVIDERS.length > 0) {
+    rpc = cfg.RPC_PROVIDERS[0].url;
+  }
+  
+  let provider: ethers.JsonRpcProvider | undefined;
+  let signer: ethers.Wallet | undefined;
+  if (rpc) {
+    provider = new ethers.JsonRpcProvider(rpc);
+    if (cfg.PRIVATE_KEY) signer = new ethers.Wallet(cfg.PRIVATE_KEY, provider);
   } else {
-    logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false or DRY_RUN=true)');
+    logger.warn('[STARTUP] No PRIMARY_RPC_HTTP/RPC_PROVIDERS configured; live execution/mempool disabled');
+  }
+
+  // Optional one-shot execution path (guarded by env)
+  const autoExec = String(process.env.AUTO_EXECUTE_ON_START || '').toLowerCase() === 'true';
+  if (autoExec && provider && signer) {
+    const vault = process.env.BALANCER_VAULT_ADDRESS || '';
+    const receiver = process.env.RECEIVER_ADDRESS || '';
+    const tokens = (process.env.EXEC_TOKENS || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const amounts = (process.env.EXEC_AMOUNTS || '').split(',').map((s) => s.trim()).filter(Boolean)
+      .map((n) => BigInt(n));
+    if (vault && receiver && tokens.length && amounts.length) {
+      await executeFlashloanSwapRepay(signer, { vault, receiver, tokens, amounts, userData: '0x' });
+    } else {
+      logger.info('[STARTUP] AUTO_EXECUTE_ON_START set but execution env not fully configured; skipping');
+    }
+  }
+
+  // Optional mempool strategy (basic watcher)
+  if (cfg.ENABLE_MEMPOOL && provider && signer) {
+    const stop = startPendingSwapWatcher({ provider, signer, minValueEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 50) });
+    process.on('SIGTERM', stop);
+    process.on('SIGINT', stop);
+  } else {
+    logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false or RPC/keys missing)');
   }
 
   logger.info('[STARTUP] Bot started successfully');
