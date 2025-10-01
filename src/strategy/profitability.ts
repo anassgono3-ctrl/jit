@@ -99,7 +99,7 @@ export async function estimateProfitAndGas(
   const estProfitEth = notionalEth * (profitBps / 10000);
 
   // 2) Estimate gas cost
-  let gasUnits = DEFAULT_GAS_OVERHEAD; // default overhead
+  const gasUnits = DEFAULT_GAS_OVERHEAD; // default overhead
   let gasPriceWei: bigint = 0n;
 
   try {
