@@ -1,11 +1,51 @@
-// Minimal Flashbots wrapper with a safe fallback.
-// If FLASHBOTS_SIGNER_KEY is absent, falls back to normal send.
+// Minimal Flashbots wrapper with safe fallback and basic bundle attempt.
+// NOTE: This is intentionally conservative and dependency-light.
+// For production, consider integrating a full-featured Flashbots SDK.
 import { ethers } from 'ethers';
 import logger from '../modules/logger';
 
 export interface FlashbotsConfig {
   relayUrl?: string;            // default https://relay.flashbots.net
   authKey?: string;             // 0x... private key for auth (not bot signer)
+  targetBlockNumber?: number;   // optional block target for bundle
+}
+
+async function trySendBundle(
+  signedTx: string[],
+  relayUrl: string,
+  authKey: string,
+  targetBlockNumber: number
+) {
+  const authWallet = new ethers.Wallet(authKey);
+  const body = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'eth_sendBundle',
+    params: [{
+      txs: signedTx,
+      blockNumber: ethers.toBeHex(targetBlockNumber),
+      minTimestamp: 0,
+      maxTimestamp: 0,
+      revertingTxHashes: []
+    }]
+  };
+  const payload = JSON.stringify(body);
+  const sig = `${await authWallet.getAddress()}:${await authWallet.signMessage(ethers.getBytes(ethers.id(payload)))}`;
+
+  const res = await fetch(relayUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Flashbots-Signature': sig
+    } as any,
+    body: payload
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`[flashbots] relay error ${res.status}: ${txt}`);
+  }
+  return res.json();
 }
 
 export async function sendViaFlashbotsOrDefault(
@@ -15,18 +55,27 @@ export async function sendViaFlashbotsOrDefault(
 ) {
   const relay = cfg?.relayUrl || process.env.FLASHBOTS_RELAY_URL || 'https://relay.flashbots.net';
   const authKey = cfg?.authKey || process.env.FLASHBOTS_SIGNER_KEY;
-  if (!authKey) {
-    logger.info('[flashbots] no auth key; using default send');
+  const provider = (signer as any).provider as ethers.Provider;
+  const forceBundle = String(process.env.FLASHBOTS_BUNDLE || '').toLowerCase() === 'true';
+
+  if (!authKey || !provider || !forceBundle) {
+    // Default send if Flashbots not fully configured or bundle not requested
     return signer.sendTransaction(tx);
   }
 
-  // NOTE: A full Flashbots client would construct a bundle, sign it with authKey, and POST to relay.
-  // To keep this integration safe and dependency-light, we log intent and fallback unless FORCE is set.
-  const force = String(process.env.FLASHBOTS_FORCE || '').toLowerCase() === 'true';
-  logger.info({ relay }, '[flashbots] requested; minimal client in use');
-  if (!force) {
-    logger.warn('[flashbots] minimal client — falling back to default send (set FLASHBOTS_FORCE=true to force default anyway)');
+  // Build and sign tx, then try bundle submission to target block+1
+  const pn = await provider.getBlockNumber();
+  const target = cfg?.targetBlockNumber ?? pn + 1;
+
+  const populated = await signer.populateTransaction(tx);
+  const signed = await (signer as ethers.Wallet).signTransaction(populated);
+
+  try {
+    const out = await trySendBundle([signed], relay, authKey, target);
+    // Not all relays return a handle we can await; we return the relay response for observability
+    return out;
+  } catch (e) {
+    logger.warn({ err: String((e as any)?.message || e) }, '[flashbots] bundle failed; falling back to default send');
+    return signer.sendTransaction(tx);
   }
-  // Fallback: normal network send
-  return signer.sendTransaction(tx);
 }
