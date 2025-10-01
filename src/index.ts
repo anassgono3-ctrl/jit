@@ -76,9 +76,9 @@ export async function main(opts: { testMode?: boolean } = {}) {
     }
   }
 
-  // Optional mempool strategy (basic watcher)
+  // Optional mempool strategy (Uniswap V3 decode + ProfitGuard)
   if (cfg.ENABLE_MEMPOOL && provider && signer) {
-    const stop = startPendingSwapWatcher({ provider, signer, minValueEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 50) });
+    const stop = startPendingSwapWatcher({ provider, signer, minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10) });
     process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
   } else {
