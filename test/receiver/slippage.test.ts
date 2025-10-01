@@ -10,12 +10,10 @@ describe("Receiver slippage + quoter", function () {
     // default slippageBps=50
     const quote = ethers.parseEther("1000");
     const min = await r.calcAmountOutMin(quote);
-    expect(min).to.equal(quote * 9950n / 10000n);
+    expect(min).to.equal((quote * 9950n) / 10000n);
   });
 
   it("uses quoter to set amountOutMinimum; swap succeeds if router returns >= minOut", async function () {
-    const [deployer] = await ethers.getSigners();
-
     // Deploy mocks
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
     const tokenIn = await ERC20Mock.deploy("TokenIn", "TIN");
@@ -28,137 +26,202 @@ describe("Receiver slippage + quoter", function () {
     const MockVault = await ethers.getContractFactory("MockVault");
     const vault = await MockVault.deploy();
     await vault.waitForDeployment();
+    const vaultAddr = await vault.getAddress();
 
     const Router = await ethers.getContractFactory("MockRouterV3");
     const router = await Router.deploy();
     await router.waitForDeployment();
+    const routerAddr = await router.getAddress();
 
     const Quoter = await ethers.getContractFactory("MockQuoter");
     const quoter = await Quoter.deploy();
     await quoter.waitForDeployment();
+    const quoterAddr = await quoter.getAddress();
 
     const Receiver = await ethers.getContractFactory("BalancerFlashJitReceiver");
     const r = await Receiver.deploy();
     await r.waitForDeployment();
-
-    // Configure receiver
-    await r.setSwapRouter(await router.getAddress());
-    await r.setQuoter(await quoter.getAddress());
-    await r.setDefaultPoolFee(3000); // default
-
-    // Fund vault with tokenIn to loan
-    const vaultAddr = await vault.getAddress();
     const receiverAddr = await r.getAddress();
 
-    const loanAmount = ethers.parseEther("10");
-    await tokenIn.mint(vaultAddr, ethers.parseEther("1000")); // supply principal liquidity to vault
-    await tokenOut.mint(await router.getAddress(), ethers.parseEther("1000")); // router has tokenOut to send
+    // Configure receiver
+    await r.setSwapRouter(routerAddr);
+    await r.setQuoter(quoterAddr);
+    await r.setDefaultPoolFee(3000); // default
 
-    // Quoter returns 100 tokenOut for amountIn=5 => minOut ~ 99.5 with 50 bps default
+    // Vault has liquidity to lend tokenIn principal
+    const loanAmount = ethers.parseEther("10");
+    await tokenIn.mint(vaultAddr, ethers.parseEther("1000"));
+
+    // Router has tokenOut to send to receiver
+    await tokenOut.mint(routerAddr, ethers.parseEther("1000"));
+
+    // Quoter returns 100 for amountIn=5; with 50 bps slippage => minOut ~ 99.5; router will return 100
     await quoter.setQuote(ethers.parseEther("100"));
-    // Router will provide 100 which is >= minOut
     await router.setAmountOut(ethers.parseEther("100"));
 
-    // Pre-fund receiver with small buffer to cover fee pull
-    await tokenIn.mint(receiverAddr, ethers.parseEther("1"));
+    // Compute fee and pre-fund receiver with amountIn + fee to ensure repay after swapping half away
+    const feeBps: bigint = BigInt(await vault.feeBps());
+    const expectedFee = (loanAmount * feeBps) / 10000n;
+    const amountInHalf = loanAmount / 2n;
+    const buffer = amountInHalf + expectedFee;
 
-    // Flashloan: tokens[0]=tokenIn, tokens[1]=tokenOut
-    await vault.flashLoan(receiverAddr, [addrIn, addrOut], [loanAmount, 0n], "0x");
+    await tokenIn.mint(receiverAddr, buffer);
 
-    // Verify router pulled tokenIn/2 and receiver got tokenOut
+    const beforeVaultIn = await tokenIn.balanceOf(vaultAddr);
+
+    // Flashloan: tokens[0]=tokenIn, tokens[1]=tokenOut (amount 0 for out)
+    const tx = await vault.flashLoan(receiverAddr, [addrIn, addrOut], [loanAmount, 0n], "0x");
+    const receipt = await tx.wait();
+
+    // Router pulled amountInHalf of tokenIn and sent 100 tokenOut to receiver
     const receiverOut = await tokenOut.balanceOf(receiverAddr);
     expect(receiverOut).to.equal(ethers.parseEther("100"));
+
+    // Vault should end with principal + fee for tokenIn => net +fee vs before
+    const afterVaultIn = await tokenIn.balanceOf(vaultAddr);
+    expect(afterVaultIn).to.equal(beforeVaultIn + expectedFee);
+
+    // Verify SwapExecuted event was emitted
+    const iface = r.interface;
+    const logsForReceiver = (receipt!.logs as any[]).filter(
+      (l) => (l.address || "").toLowerCase() === receiverAddr.toLowerCase()
+    );
+    const names = logsForReceiver
+      .map((log) => {
+        try {
+          return iface.parseLog({ topics: log.topics, data: log.data })?.name;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    expect(names).to.include("SwapExecuted");
   });
 
-  it("reverts swap when router returns below amountOutMinimum", async function () {
+  it("does not revert entire flashLoan when router would return below minOut (swap caught); no SwapExecuted emitted", async function () {
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
     const tokenIn = await ERC20Mock.deploy("A", "A");
     const tokenOut = await ERC20Mock.deploy("B", "B");
     await tokenIn.waitForDeployment();
     await tokenOut.waitForDeployment();
+    const addrIn = await tokenIn.getAddress();
+    const addrOut = await tokenOut.getAddress();
 
     const MockVault = await ethers.getContractFactory("MockVault");
     const vault = await MockVault.deploy();
     await vault.waitForDeployment();
+    const vaultAddr = await vault.getAddress();
 
     const Router = await ethers.getContractFactory("MockRouterV3");
     const router = await Router.deploy();
     await router.waitForDeployment();
+    const routerAddr = await router.getAddress();
 
     const Quoter = await ethers.getContractFactory("MockQuoter");
     const quoter = await Quoter.deploy();
     await quoter.waitForDeployment();
+    const quoterAddr = await quoter.getAddress();
 
     const Receiver = await ethers.getContractFactory("BalancerFlashJitReceiver");
     const r = await Receiver.deploy();
     await r.waitForDeployment();
-
-    await r.setSwapRouter(await router.getAddress());
-    await r.setQuoter(await quoter.getAddress());
-
-    const vaultAddr = await vault.getAddress();
     const receiverAddr = await r.getAddress();
+
+    await r.setSwapRouter(routerAddr);
+    await r.setQuoter(quoterAddr);
+    await r.setDefaultPoolFee(3000);
 
     const loanAmount = ethers.parseEther("10");
     await tokenIn.mint(vaultAddr, ethers.parseEther("1000"));
-    await tokenOut.mint(await router.getAddress(), ethers.parseEther("1000"));
+    await tokenOut.mint(routerAddr, ethers.parseEther("1000"));
 
-    // Quoter returns 100; with 50bps minOut ~ 99.5; router only provides 99 -> revert
+    // Quoter => 100; with 50bps minOut ~ 99.5; router only provides 99 -> swap would fail, but receiver catches and continues
     await quoter.setQuote(ethers.parseEther("100"));
     await router.setAmountOut(ethers.parseEther("99"));
 
-    // buffer for fee
-    await tokenIn.mint(receiverAddr, ethers.parseEther("1"));
+    // Pre-fund receiver with half + fee to ensure repay even if swap pulls half (in this case it will revert and be caught)
+    const feeBps: bigint = BigInt(await vault.feeBps());
+    const expectedFee = (loanAmount * feeBps) / 10000n;
+    const amountInHalf = loanAmount / 2n;
+    const buffer = amountInHalf + expectedFee;
+    await tokenIn.mint(receiverAddr, buffer);
 
-    // Expect swap revert inside callback, but flashloan overall should still complete with repayment pull attempt.
-    // Our MockVault pull might then fail if balances insufficient; we only assert the swap revert is hit by observing final balances.
-    try {
-      await vault.flashLoan(receiverAddr, [await tokenIn.getAddress(), await tokenOut.getAddress()], [loanAmount, 0n], "0x");
-    } catch (e: any) {
-      // Swap revert bubbles; acceptable for this test. Ensure it mentions slippage.
-      expect(String(e?.message || e)).to.match(/TooMuchSlippage/);
-      return;
-    }
-    expect.fail("expected slippage revert but flashLoan did not revert");
+    const beforeVaultIn = await tokenIn.balanceOf(vaultAddr);
+
+    const tx = await vault.flashLoan(receiverAddr, [addrIn, addrOut], [loanAmount, 0n], "0x");
+    const receipt = await tx.wait();
+
+    // No SwapExecuted event (swap reverted and was caught)
+    const iface = r.interface;
+    const logsForReceiver = (receipt!.logs as any[]).filter(
+      (l) => (l.address || "").toLowerCase() === receiverAddr.toLowerCase()
+    );
+    const names = logsForReceiver
+      .map((log) => {
+        try {
+          return iface.parseLog({ topics: log.topics, data: log.data })?.name;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    expect(names).to.not.include("SwapExecuted");
+
+    // Vault still ends with +fee
+    const afterVaultIn = await tokenIn.balanceOf(vaultAddr);
+    expect(afterVaultIn).to.equal(beforeVaultIn + expectedFee);
   });
 
-  it("falls back to amountOutMinimum=0 when quoter is unset or reverts", async function () {
+  it("falls back to amountOutMinimum=0 when quoter is unset; swap executes and flashLoan repays", async function () {
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
     const tokenIn = await ERC20Mock.deploy("A", "A");
     const tokenOut = await ERC20Mock.deploy("B", "B");
     await tokenIn.waitForDeployment();
     await tokenOut.waitForDeployment();
+    const addrIn = await tokenIn.getAddress();
+    const addrOut = await tokenOut.getAddress();
 
     const MockVault = await ethers.getContractFactory("MockVault");
     const vault = await MockVault.deploy();
     await vault.waitForDeployment();
+    const vaultAddr = await vault.getAddress();
 
     const Router = await ethers.getContractFactory("MockRouterV3");
     const router = await Router.deploy();
     await router.waitForDeployment();
+    const routerAddr = await router.getAddress();
 
     const Receiver = await ethers.getContractFactory("BalancerFlashJitReceiver");
     const r = await Receiver.deploy();
     await r.waitForDeployment();
-
-    await r.setSwapRouter(await router.getAddress());
-    // Intentionally no quoter set -> fallback minOut=0
-
-    const vaultAddr = await vault.getAddress();
     const receiverAddr = await r.getAddress();
+
+    await r.setSwapRouter(routerAddr);
+    // No quoter set -> fallback minOut = 0
 
     const loanAmount = ethers.parseEther("10");
     await tokenIn.mint(vaultAddr, ethers.parseEther("1000"));
-    await tokenOut.mint(await router.getAddress(), ethers.parseEther("1000"));
+    await tokenOut.mint(routerAddr, ethers.parseEther("1000"));
 
     await router.setAmountOut(ethers.parseEther("1")); // tiny output but >= 0 is fine
 
-    await tokenIn.mint(receiverAddr, ethers.parseEther("1")); // fee buffer
+    // Pre-fund receiver with half + fee so we can repay after swapping half away
+    const feeBps: bigint = BigInt(await vault.feeBps());
+    const expectedFee = (loanAmount * feeBps) / 10000n;
+    const amountInHalf = loanAmount / 2n;
+    const buffer = amountInHalf + expectedFee;
+    await tokenIn.mint(receiverAddr, buffer);
 
-    // Should not revert due to minOut=0
-    await vault.flashLoan(receiverAddr, [await tokenIn.getAddress(), await tokenOut.getAddress()], [loanAmount, 0n], "0x");
+    const beforeVaultIn = await tokenIn.balanceOf(vaultAddr);
 
+    const tx = await vault.flashLoan(receiverAddr, [addrIn, addrOut], [loanAmount, 0n], "0x");
+    const receipt = await tx.wait();
+
+    // Swap executed (router sends 1)
     const receiverOut = await tokenOut.balanceOf(receiverAddr);
     expect(receiverOut).to.equal(ethers.parseEther("1"));
+
+    const afterVaultIn = await tokenIn.balanceOf(vaultAddr);
+    expect(afterVaultIn).to.equal(beforeVaultIn + expectedFee);
   });
 });
