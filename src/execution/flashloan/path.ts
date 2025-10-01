@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import logger from '../../modules/logger';
 import { simulateAndSend } from '../../runtime/safety';
 import { sendViaFlashbotsOrDefault } from '../../tx/flashbots';
+import { estimateProfitAndGas } from '../../strategy/profitability';
 
 // Execution skeleton: flashloan -> swap/liquidity -> repay.
 // Safe by default: DRY_RUN=true simulates; EXECUTION_SAFE_MODE reduces sizes off-chain as well.
@@ -57,7 +58,21 @@ export async function executeFlashloanSwapRepay(
     return;
   }
 
-  // Live path: simulate then send (Flashbots if configured)
+  // Live path: run profit + gas guard before attempting live execution
+  try {
+    const provider = (signer as any).provider as ethers.Provider | undefined;
+    // If you can compute a notional ETH value off-chain, pass it here as { notionalEth }
+    const profitCheck = await estimateProfitAndGas(provider, cfg.tokens, cfg.amounts);
+    if (!profitCheck.allowed) {
+      logger.warn({ profitCheck }, '[exec] Profit/Gas guard blocked live execution; skipping');
+      return;
+    }
+  } catch (e) {
+    logger.warn({ err: String((e as any)?.message || e) }, '[exec] profit/gas guard failed; aborting live execution for safety');
+    return;
+  }
+
+  // simulate then send (Flashbots if configured after)
   await simulateAndSend({
     signer,
     txFactory: async () => txReq,
