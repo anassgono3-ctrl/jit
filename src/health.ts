@@ -1,6 +1,6 @@
 // src/health.ts
 import http from 'http';
-import { registry } from './metrics';
+import { registry, lastMempoolStatus } from './metrics';
 import logger from './modules/logger';
 import { loadConfig } from './config';
 
@@ -16,9 +16,16 @@ export function startHealthServer(port: number): http.Server {
 
       if (req.url?.startsWith('/healthz')) {
         const cfg = loadConfig();
-        // Minimal readiness check: PRIVATE_KEY present when DRY_RUN=false
+        // Minimal readiness: PRIVATE_KEY present when DRY_RUN=false
         const ok = cfg.DRY_RUN || Boolean(cfg.PRIVATE_KEY);
-        const body = JSON.stringify({ ok, dryRun: cfg.DRY_RUN === true });
+        const body = JSON.stringify({
+          ok,
+          dryRun: cfg.DRY_RUN === true,
+          mempool: {
+            enabled: lastMempoolStatus.enabled,
+            mode: lastMempoolStatus.mode, // 0=disabled,1=ws,2=polling
+          },
+        });
         res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' });
         res.end(body);
         return;

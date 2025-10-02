@@ -45,20 +45,23 @@ export async function main(opts: { testMode?: boolean } = {}) {
   startHealthServer(healthPort);
 
   // Build provider/signer for optional execution & mempool
-  let rpc: string | undefined;
-  if (cfg.PRIMARY_RPC_HTTP) {
-    rpc = cfg.PRIMARY_RPC_HTTP;
-  } else if (cfg.RPC_PROVIDERS && cfg.RPC_PROVIDERS.length > 0) {
-    rpc = cfg.RPC_PROVIDERS[0].url;
-  }
-  
-  let provider: ethers.JsonRpcProvider | undefined;
+  const ws = process.env.PRIMARY_RPC_WS;
+  const http = process.env.PRIMARY_RPC_HTTP || process.env.RPC_PROVIDERS?.split(',')?.[0];
+  let provider: ethers.WebSocketProvider | ethers.JsonRpcProvider | undefined;
   let signer: ethers.Wallet | undefined;
-  if (rpc) {
-    provider = new ethers.JsonRpcProvider(rpc);
-    if (cfg.PRIVATE_KEY) signer = new ethers.Wallet(cfg.PRIVATE_KEY, provider);
+
+  if (ws) {
+    provider = new ethers.WebSocketProvider(ws);
+    logger.info({ ws }, '[STARTUP] Using WebSocketProvider for RPC');
+  } else if (http) {
+    provider = new ethers.JsonRpcProvider(http);
+    logger.info({ http }, '[STARTUP] Using JsonRpcProvider (HTTP) for RPC');
   } else {
-    logger.warn('[STARTUP] No PRIMARY_RPC_HTTP/RPC_PROVIDERS configured; live execution/mempool disabled');
+    logger.warn('[STARTUP] No PRIMARY_RPC_WS or PRIMARY_RPC_HTTP/RPC_PROVIDERS configured; live execution/mempool disabled');
+  }
+
+  if (provider && cfg.PRIVATE_KEY) {
+    signer = new ethers.Wallet(cfg.PRIVATE_KEY, provider);
   }
 
   // Optional one-shot execution path (guarded by env)
@@ -78,7 +81,12 @@ export async function main(opts: { testMode?: boolean } = {}) {
 
   // Optional mempool strategy (Uniswap V3 decode + ProfitGuard)
   if (cfg.ENABLE_MEMPOOL && provider && signer) {
-    const stop = startPendingSwapWatcher({ provider, signer, minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10) });
+    const stop = startPendingSwapWatcher({
+      provider,
+      signer,
+      minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10),
+      pollMs: Number(process.env.MEMPOOL_POLL_MS || 1500),
+    });
     process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
   } else {
