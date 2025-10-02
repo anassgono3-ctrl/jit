@@ -1,5 +1,5 @@
 // src/metrics.ts
-import { collectDefaultMetrics, Counter, Registry } from 'prom-client';
+import { collectDefaultMetrics, Counter, Gauge, Registry } from 'prom-client';
 
 export const registry = new Registry();
 collectDefaultMetrics({ register: registry });
@@ -28,3 +28,25 @@ export const flashloanSuccessTotal = new Counter({
   help: 'Total successful flashloans executed by strategies',
   registers: [registry],
 });
+
+// Mempool observability
+export const mempoolEnabled = new Gauge({
+  name: 'mempool_enabled',
+  help: 'Mempool watcher enabled (1) or disabled (0)',
+  registers: [registry],
+});
+
+export const mempoolMode = new Gauge({
+  name: 'mempool_mode',
+  help: 'Mempool mode: 0=disabled, 1=ws, 2=polling',
+  registers: [registry],
+});
+
+export type MempoolStatus = { enabled: boolean; mode: 0 | 1 | 2 };
+export let lastMempoolStatus: MempoolStatus = { enabled: false, mode: 0 };
+
+export function setMempoolStatus(enabled: boolean, mode: 0 | 1 | 2) {
+  lastMempoolStatus = { enabled, mode };
+  mempoolEnabled.set(enabled ? 1 : 0);
+  mempoolMode.set(mode);
+}

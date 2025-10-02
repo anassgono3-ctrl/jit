@@ -22,6 +22,10 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 process.env.LOG_PRETTY = process.env.LOG_PRETTY || 'false';
 process.env.HEALTHCHECK_PORT = process.env.HEALTHCHECK_PORT || '9090';
 
+const ws = process.env.PRIMARY_RPC_WS;
+const http = process.env.PRIMARY_RPC_HTTP || (process.env.RPC_PROVIDERS || '').split(',')[0];
+console.log('[run-vps.js] RPC selection:', { ws: !!ws, http: !!http });
+
 const distMain = path.join(cwd, 'dist', 'index.js');
 if (!fs.existsSync(distMain)) {
   console.log('[run-vps.js] dist/index.js not found; building...');
