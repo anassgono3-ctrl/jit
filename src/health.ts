@@ -1,6 +1,6 @@
 // src/health.ts
 import http from 'http';
-import { registry, lastMempoolStatus } from './metrics';
+import { registry, lastMempoolStatus, lastRpcMode } from './metrics';
 import logger from './modules/logger';
 import { loadConfig } from './config';
 
@@ -21,6 +21,9 @@ export function startHealthServer(port: number): http.Server {
         const body = JSON.stringify({
           ok,
           dryRun: cfg.DRY_RUN === true,
+          rpc: {
+            mode: lastRpcMode, // 0 unknown, 1 external, 2 fullnode
+          },
           mempool: {
             enabled: lastMempoolStatus.enabled,
             mode: lastMempoolStatus.mode, // 0=disabled,1=ws,2=polling

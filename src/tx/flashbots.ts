@@ -8,6 +8,7 @@ export interface FlashbotsConfig {
   relayUrl?: string;            // default https://relay.flashbots.net
   authKey?: string;             // 0x... private key for auth (not bot signer)
   targetBlockNumber?: number;   // optional block target for bundle
+  blockOffset?: number;         // new
 }
 
 async function trySendBundle(
@@ -63,9 +64,10 @@ export async function sendViaFlashbotsOrDefault(
     return signer.sendTransaction(tx);
   }
 
-  // Build and sign tx, then try bundle submission to target block+1
-  const pn = await provider.getBlockNumber();
-  const target = cfg?.targetBlockNumber ?? pn + 1;
+  // Build and sign tx, then try bundle submission to target block+offset
+  const head = await provider.getBlockNumber();
+  const blockOffset = cfg?.blockOffset ?? Number(process.env.FLASHBOTS_BLOCK_OFFSET || 1);
+  const target = head + blockOffset;
 
   const populated = await signer.populateTransaction(tx);
   const signed = await (signer as ethers.Wallet).signTransaction(populated);

@@ -42,11 +42,24 @@ export const mempoolMode = new Gauge({
   registers: [registry],
 });
 
+// RPC mode (external vs fullnode)
+export const rpcModeGauge = new Gauge({
+  name: 'rpc_mode',
+  help: 'RPC mode: 0=unknown, 1=external, 2=fullnode',
+  registers: [registry],
+});
+
 export type MempoolStatus = { enabled: boolean; mode: 0 | 1 | 2 };
 export let lastMempoolStatus: MempoolStatus = { enabled: false, mode: 0 };
+export let lastRpcMode: 0 | 1 | 2 = 0;
 
 export function setMempoolStatus(enabled: boolean, mode: 0 | 1 | 2) {
   lastMempoolStatus = { enabled, mode };
   mempoolEnabled.set(enabled ? 1 : 0);
   mempoolMode.set(mode);
+}
+
+export function setRpcMode(mode: 'external' | 'fullnode' | 'unknown') {
+  lastRpcMode = mode === 'external' ? 1 : mode === 'fullnode' ? 2 : 0;
+  rpcModeGauge.set(lastRpcMode);
 }

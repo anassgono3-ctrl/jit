@@ -254,6 +254,40 @@ erigon \
   --txpool.globalbasefee=1000000000
 ```
 
+## External RPC Mode (BlockPI / QuickNode)
+
+You can run the bot **without** a full node:
+
+```bash
+PRIMARY_RPC_WS=wss://ethereum.blockpi.network/v1/ws/YOUR_KEY
+PRIMARY_RPC_HTTP=https://ethereum.blockpi.network/v1/rpc/YOUR_KEY
+ENABLE_MEMPOOL=true
+DRY_RUN=true
+```
+
+**Behavior:**
+- If `PRIMARY_RPC_WS` is present → WebSocket pending subscription (mode=ws).
+- Else if HTTP supports pending filters → polling mode.
+- If neither works → mempool watcher disabled gracefully (no crash).
+
+**Limitations:**
+- Managed external RPC mempool feeds can be partial or delayed.
+- For full coverage / lower latency use a local Erigon/Geth with WS.
+
+**Switching to a full node later:**
+- Point `PRIMARY_RPC_WS` (and optionally `PRIMARY_RPC_HTTP`) at `ws://127.0.0.1:8546` / `http://127.0.0.1:8545`.
+- Health: `/healthz` returns rpc.mode 1 (external) or 2 (fullnode).
+- Metrics: `rpc_mode` and `mempool_mode` gauges for dashboards.
+
+**Flashbots:**
+- Set `FLASHBOTS_BUNDLE=true` and (optionally) adjust `FLASHBOTS_BLOCK_OFFSET` to handle external RPC head lag.
+
+**Testing:**
+Run fallback tests:
+```bash
+npm test
+```
+
 ## Core Components
 
 ### Math Modules (Zero Precision Loss)

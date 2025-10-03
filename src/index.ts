@@ -2,9 +2,11 @@ import 'dotenv/config';
 import logger from './modules/logger';
 import { loadConfig, getConfigSummary } from './config';
 import { startHealthServer } from './health';
-import { ethers } from 'ethers';
+import { buildProvider } from './provider/factory';
+import { setRpcMode } from './metrics';
 import { executeFlashloanSwapRepay } from './execution/flashloan/path';
 import { startPendingSwapWatcher } from './runtime/mempool/strategy/pendingSwapWatcher';
+import { ethers } from 'ethers';
 
 function validateLiveMode() {
   const cfg = loadConfig();
@@ -44,29 +46,22 @@ export async function main(opts: { testMode?: boolean } = {}) {
   const healthPort = Number(process.env.HEALTHCHECK_PORT || 9090);
   startHealthServer(healthPort);
 
-  // Build provider/signer for optional execution & mempool
-  const ws = process.env.PRIMARY_RPC_WS;
-  const http = process.env.PRIMARY_RPC_HTTP || process.env.RPC_PROVIDERS?.split(',')?.[0];
-  let provider: ethers.WebSocketProvider | ethers.JsonRpcProvider | undefined;
+  // Provider build
+  const info = await buildProvider();
   let signer: ethers.Wallet | undefined;
-
-  if (ws) {
-    provider = new ethers.WebSocketProvider(ws);
-    logger.info({ ws }, '[STARTUP] Using WebSocketProvider for RPC');
-  } else if (http) {
-    provider = new ethers.JsonRpcProvider(http);
-    logger.info({ http }, '[STARTUP] Using JsonRpcProvider (HTTP) for RPC');
+  if (info) {
+    setRpcMode(info.mode);
+    if (cfg.PRIVATE_KEY) {
+      signer = new ethers.Wallet(cfg.PRIVATE_KEY, info.provider);
+    }
   } else {
-    logger.warn('[STARTUP] No PRIMARY_RPC_WS or PRIMARY_RPC_HTTP/RPC_PROVIDERS configured; live execution/mempool disabled');
-  }
-
-  if (provider && cfg.PRIVATE_KEY) {
-    signer = new ethers.Wallet(cfg.PRIVATE_KEY, provider);
+    setRpcMode('unknown');
+    logger.warn('[STARTUP] No RPC provider configured; mempool & execution disabled');
   }
 
   // Optional one-shot execution path (guarded by env)
   const autoExec = String(process.env.AUTO_EXECUTE_ON_START || '').toLowerCase() === 'true';
-  if (autoExec && provider && signer) {
+  if (autoExec && info?.provider && signer) {
     const vault = process.env.BALANCER_VAULT_ADDRESS || '';
     const receiver = process.env.RECEIVER_ADDRESS || '';
     const tokens = (process.env.EXEC_TOKENS || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -75,20 +70,21 @@ export async function main(opts: { testMode?: boolean } = {}) {
     if (vault && receiver && tokens.length && amounts.length) {
       await executeFlashloanSwapRepay(signer, { vault, receiver, tokens, amounts, userData: '0x' });
     } else {
-      logger.info('[STARTUP] AUTO_EXECUTE_ON_START set but execution env not fully configured; skipping');
+      logger.info('[STARTUP] AUTO_EXECUTE_ON_START set but execution env incomplete; skipping');
     }
   }
 
-  // Optional mempool strategy (Uniswap V3 decode + ProfitGuard)
-  if (cfg.ENABLE_MEMPOOL && provider && signer) {
+  // Mempool watcher
+  if (cfg.ENABLE_MEMPOOL && info?.provider && signer) {
     const stop = startPendingSwapWatcher({
-      provider,
+      provider: info.provider,
       signer,
       minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10),
       pollMs: Number(process.env.MEMPOOL_POLL_MS || 1500),
+      maxFilterResets: Number(process.env.MEMPOOL_MAX_FILTER_RESETS || 3),
     });
-    process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
   } else {
     logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false or RPC/keys missing)');
   }
