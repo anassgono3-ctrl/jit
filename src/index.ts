@@ -51,13 +51,23 @@ export async function main(opts: { testMode?: boolean } = {}) {
   let signer: ethers.Wallet | undefined;
 
   if (ws) {
-    provider = new ethers.WebSocketProvider(ws);
-    logger.info({ ws }, '[STARTUP] Using WebSocketProvider for RPC');
-  } else if (http) {
-    provider = new ethers.JsonRpcProvider(http);
-    logger.info({ http }, '[STARTUP] Using JsonRpcProvider (HTTP) for RPC');
-  } else {
-    logger.warn('[STARTUP] No PRIMARY_RPC_WS or PRIMARY_RPC_HTTP/RPC_PROVIDERS configured; live execution/mempool disabled');
+    try {
+      provider = new ethers.WebSocketProvider(ws);
+      logger.info({ ws }, '[STARTUP] Using WebSocketProvider');
+    } catch (e) {
+      logger.warn({ ws, err: String((e as any)?.message || e) }, '[STARTUP] Failed WS provider init, will fallback to HTTP if available');
+    }
+  }
+  if (!provider && http) {
+    try {
+      provider = new ethers.JsonRpcProvider(http);
+      logger.info({ http }, '[STARTUP] Using JsonRpcProvider (HTTP)');
+    } catch (e) {
+      logger.error({ http, err: String((e as any)?.message || e) }, '[STARTUP] Failed HTTP provider init');
+    }
+  }
+  if (!provider) {
+    logger.warn('[STARTUP] No usable RPC provider (WS or HTTP) established.');
   }
 
   if (provider && cfg.PRIVATE_KEY) {
@@ -69,38 +79,47 @@ export async function main(opts: { testMode?: boolean } = {}) {
   if (autoExec && provider && signer) {
     const vault = process.env.BALANCER_VAULT_ADDRESS || '';
     const receiver = process.env.RECEIVER_ADDRESS || '';
-    const tokens = (process.env.EXEC_TOKENS || '').split(',').map((s) => s.trim()).filter(Boolean);
-    const amounts = (process.env.EXEC_AMOUNTS || '').split(',').map((s) => s.trim()).filter(Boolean)
-      .map((n) => BigInt(n));
-    if (vault && receiver && tokens.length && amounts.length) {
+    const tokens = (process.env.EXEC_TOKENS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const amounts = (process.env.EXEC_AMOUNTS || '').split(',').map(s => s.trim()).filter(Boolean).map(n => BigInt(n));
+    if (vault && receiver && tokens.length === amounts.length && tokens.length > 0) {
       await executeFlashloanSwapRepay(signer, { vault, receiver, tokens, amounts, userData: '0x' });
     } else {
-      logger.info('[STARTUP] AUTO_EXECUTE_ON_START set but execution env not fully configured; skipping');
+      logger.info('[STARTUP] AUTO_EXECUTE_ON_START set but execution env incomplete; skipping');
     }
   }
 
-  // Optional mempool strategy (Uniswap V3 decode + ProfitGuard)
-  if (cfg.ENABLE_MEMPOOL && provider && signer) {
-    const stop = startPendingSwapWatcher({
-      provider,
-      signer,
-      minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10),
-      pollMs: Number(process.env.MEMPOOL_POLL_MS || 1500),
-    });
-    process.on('SIGTERM', stop);
-    process.on('SIGINT', stop);
+  // Mempool watcher
+  if (cfg.ENABLE_MEMPOOL) {
+    if (!provider) {
+      logger.warn('[mempool] ENABLE_MEMPOOL=true but no provider established; disabling mempool features');
+    } else if (!signer) {
+      logger.warn('[mempool] ENABLE_MEMPOOL=true but signer unavailable (no PRIVATE_KEY in DRY_RUN=false); watcher limited to observe-only');
+      startPendingSwapWatcher({
+        provider,
+        signer: new ethers.Wallet(ethers.Wallet.createRandom().privateKey, provider), // ephemeral for decode logging
+        minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10),
+        pollMs: Number(process.env.MEMPOOL_POLL_MS || 1500),
+      });
+    } else {
+      startPendingSwapWatcher({
+        provider,
+        signer,
+        minNotionalEth: Number(process.env.MEMPOOL_MIN_VALUE_ETH || 10),
+        pollMs: Number(process.env.MEMPOOL_POLL_MS || 1500),
+      });
+    }
   } else {
-    logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false or RPC/keys missing)');
+    logger.info('[STARTUP] Mempool disabled (ENABLE_MEMPOOL=false)');
   }
 
   logger.info('[STARTUP] Bot started successfully');
 
   process.on('SIGINT', () => {
-    logger.info('[SHUTDOWN] Received SIGINT, shutting down gracefully...');
+    logger.info('[SHUTDOWN] SIGINT received, exiting');
     process.exit(0);
   });
   process.on('SIGTERM', () => {
-    logger.info('[SHUTDOWN] Received SIGTERM, shutting down gracefully...');
+    logger.info('[SHUTDOWN] SIGTERM received, exiting');
     process.exit(0);
   });
 }
